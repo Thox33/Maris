@@ -1,0 +1,19 @@
+[gd_resource type="TileSet" format=3 uid="uid://cus27a5g8nn44"]
+
+[ext_resource type="Texture2D" uid="uid://d04awpom3sbji" path="res://assets/tilesets/terrain_tiles.png" id="1"]
+
+[sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_1"]
+texture = ExtResource("1")
+0:0/0 = 0
+1:0/0 = 0
+0:1/0 = 0
+1:1/0 = 0
+2:1/0 = 0
+3:1/0 = 0
+4:1/0 = 0
+5:1/0 = 0
+
+[resource]
+physics_layer_0/collision_layer = 1
+physics_layer_0/collision_mask = 0
+sources/0 = SubResource("TileSetAtlasSource_1")

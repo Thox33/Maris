@@ -1,0 +1,35 @@
+# Godot 4+ specific ignores
+.godot/
+
+# Godot-specific ignores
+*.translation
+
+# Imported resources
+.import/
+
+# IDE
+.idea/
+*.swp
+*.swo
+*~
+.vscode/
+.claude/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Local dev scripts
+start-claude.sh
+start-claude.bat
+
+# Builds
+/build/
+/export/
+*.exe
+*.x86_64
+*.pck
+
+# Logs
+*.log
