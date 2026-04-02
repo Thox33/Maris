@@ -47,7 +47,7 @@ func load_chunks_around(world_pos: Vector2) -> void:
 			if loaded_chunks.has(coord):
 				continue
 			if multiplayer.is_server():
-				var chunk: ChunkData = world_generator.generate_chunk(coord)
+				var chunk: ChunkData = _generate_and_restore(coord)
 				_apply_chunk(chunk)
 			else:
 				_request_chunk.rpc_id(1, coord.x, coord.y)
@@ -110,7 +110,7 @@ func _process_load_queue() -> void:
 			continue
 
 		if multiplayer.is_server():
-			var chunk: ChunkData = world_generator.generate_chunk(coord)
+			var chunk: ChunkData = _generate_and_restore(coord)
 			_apply_chunk(chunk)
 		else:
 			_request_chunk.rpc_id(1, coord.x, coord.y)
@@ -165,7 +165,14 @@ func _apply_chunk(chunk: ChunkData) -> void:
 
 
 ## Erases a chunk's tiles from the TileMapLayer and removes it from the cache.
+## Server persists modifications to disk before erasing.
 func _erase_chunk(coord: Vector2i) -> void:
+	# Persist modifications before discarding the chunk from memory.
+	if multiplayer.is_server():
+		var chunk: ChunkData = loaded_chunks.get(coord)
+		if chunk != null:
+			SaveManager.save_chunk(coord, chunk)
+
 	var origin_x: int = coord.x * GameConstants.CHUNK_SIZE
 	var origin_y: int = coord.y * GameConstants.CHUNK_SIZE
 
@@ -176,6 +183,15 @@ func _erase_chunk(coord: Vector2i) -> void:
 			plant_layer.erase_cell(cell)
 
 	loaded_chunks.erase(coord)
+
+
+## Generates a chunk from noise and restores any saved modifications from disk.
+func _generate_and_restore(coord: Vector2i) -> ChunkData:
+	var chunk: ChunkData = world_generator.generate_chunk(coord)
+	var saved_mods: Dictionary = SaveManager.load_chunk_modifications(coord)
+	if not saved_mods.is_empty():
+		chunk.modifications = saved_mods
+	return chunk
 
 
 ## Converts a world-space pixel position to a chunk coordinate.
@@ -202,7 +218,7 @@ func _request_chunk(cx: int, cy: int) -> void:
 	if loaded_chunks.has(coord) and loaded_chunks[coord] != null:
 		chunk = loaded_chunks[coord]
 	else:
-		chunk = world_generator.generate_chunk(coord)
+		chunk = _generate_and_restore(coord)
 		_apply_chunk(chunk)
 
 	var sender_id: int = multiplayer.get_remote_sender_id()
@@ -226,24 +242,10 @@ func _receive_chunk(data: PackedByteArray) -> void:
 ## Called locally by BlockInteraction when a tile is fully broken.
 func break_tile(coord: Vector2i) -> void:
 	if multiplayer.is_server():
-		# Determine tile/item BEFORE erasing.
 		var tile_id: int = get_tile_at(coord)
-
 		_do_break_tile(coord)
 		_sync_break_tile.rpc(coord.x, coord.y)
-
-		# Spawn item drop (use drop_tile_id so variants drop the base item).
-		var props := TileProperties.get_properties(tile_id)
-		var drop_id: int = props.drop_tile_id if props else tile_id
-		var item_id: int = ItemProperties.from_tile(drop_id)
-		if item_id != ItemProperties.NONE:
-			var main_node := get_tree().get_root().get_node_or_null("Main")
-			if main_node and main_node.has_method("spawn_item_drop"):
-				var tile_center := Vector2(
-					coord.x * GameConstants.TILE_SIZE + GameConstants.TILE_SIZE / 2.0,
-					coord.y * GameConstants.TILE_SIZE + GameConstants.TILE_SIZE / 2.0
-				)
-				main_node.spawn_item_drop(item_id, 1, tile_center)
+		GameEvents.block_broken.emit(coord, tile_id)
 	else:
 		_request_break_tile.rpc_id(1, coord.x, coord.y)
 
@@ -275,19 +277,7 @@ func _request_break_tile(tx: int, ty: int) -> void:
 
 	_do_break_tile(coord)
 	_sync_break_tile.rpc(tx, ty)
-
-	# Spawn an item drop (use drop_tile_id so variants drop the base item).
-	var props := TileProperties.get_properties(tile_id)
-	var drop_id: int = props.drop_tile_id if props else tile_id
-	var item_id: int = ItemProperties.from_tile(drop_id)
-	if item_id != ItemProperties.NONE:
-		var main_node := get_tree().get_root().get_node_or_null("Main")
-		if main_node and main_node.has_method("spawn_item_drop"):
-			var tile_center := Vector2(
-				tx * GameConstants.TILE_SIZE + GameConstants.TILE_SIZE / 2.0,
-				ty * GameConstants.TILE_SIZE + GameConstants.TILE_SIZE / 2.0
-			)
-			main_node.spawn_item_drop(item_id, 1, tile_center)
+	GameEvents.block_broken.emit(coord, tile_id)
 
 
 ## Host tells all clients a tile was broken.
@@ -308,8 +298,10 @@ func is_cell_empty(coord: Vector2i) -> bool:
 func place_tile(coord: Vector2i, tile_id: int) -> void:
 	if not multiplayer.is_server():
 		return
-	_do_place_tile(coord, tile_id)
-	_sync_place_tile.rpc(coord.x, coord.y, tile_id)
+	var resolved_tile_id: int = TileProperties.resolve_placement_tile_id(tile_id)
+	_do_place_tile(coord, resolved_tile_id)
+	_sync_place_tile.rpc(coord.x, coord.y, resolved_tile_id)
+	GameEvents.block_placed.emit(coord, resolved_tile_id)
 
 
 ## Writes a single tile into the TileMapLayer and records the modification.

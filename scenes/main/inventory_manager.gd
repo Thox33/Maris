@@ -11,6 +11,8 @@ var local_inventory: Inventory
 
 ## Emitted on the client that owns this inventory when a slot changes.
 signal local_slot_changed(index: int)
+## Emitted on the client when a full inventory snapshot was received/replaced.
+signal local_inventory_synced
 
 ## Reference to the item spawner (set by main.gd).
 var item_spawner: MultiplayerSpawner
@@ -44,6 +46,17 @@ func remove_inventory(peer_id: int) -> Inventory:
 ## Returns the host-authoritative inventory for a peer, or null.
 func get_inventory(peer_id: int) -> Inventory:
 	return _inventories.get(peer_id)
+
+
+## Re-sends the full inventory to the owning client. Call after bulk changes
+## (e.g. restoring from a save file) to bring the client up to date.
+func sync_inventory(peer_id: int) -> void:
+	if not multiplayer.is_server():
+		return
+	var inv: Inventory = _inventories.get(peer_id)
+	if inv == null:
+		return
+	_sync_full_inventory_to_peer(peer_id, inv)
 
 
 # --- Host-side item operations ---
@@ -147,6 +160,7 @@ func _sync_full_inventory(data: PackedByteArray) -> void:
 	local_inventory.slot_changed.connect(func(index: int) -> void:
 		local_slot_changed.emit(index)
 	)
+	local_inventory_synced.emit()
 	print("[InventoryManager] Received full inventory (%d slots)" % local_inventory.size)
 
 

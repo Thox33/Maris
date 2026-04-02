@@ -13,7 +13,18 @@ const EMPTY: int = -1
 static var registry: Dictionary = {
 	0: TileProperties.new(0, "sand", Vector2i(0, 0), true, 1.0, true, 0.8),
 	1: TileProperties.new(1, "stone", Vector2i(1, 0), true, 1.0, true, 2.0),
-	2: TileProperties.new(2, "coral", Vector2i(0, 1), false, 0.4, true, 0.4, true),
+	2: TileProperties.new(
+		2,
+		"coral",
+		Vector2i(0, 1),
+		false,
+		0.4,
+		true,
+		0.4,
+		true,
+		-1,
+		[2, 3, 4, 5, 6, 7]
+	),
 	3: TileProperties.new(3, "coral_fan", Vector2i(1, 1), false, 0.4, true, 0.4, true, 2),
 	4: TileProperties.new(4, "coral_kelp", Vector2i(2, 1), false, 0.4, true, 0.4, true, 2),
 	5: TileProperties.new(5, "coral_brain", Vector2i(3, 1), false, 0.4, true, 0.4, true, 2),
@@ -55,6 +66,9 @@ var plant: bool
 ## Which tile ID to use for item drop lookup. Defaults to own id.
 ## Coral variants all map to the base coral tile so they drop the same item.
 var drop_tile_id: int
+## Optional pool of tile IDs that may be chosen when this tile is placed.
+## Use this for one gameplay tile with multiple visual variants.
+var placement_variants: Array[int]
 
 
 func _init(
@@ -67,6 +81,7 @@ func _init(
 	p_hardness: float,
 	p_plant: bool = false,
 	p_drop_tile_id: int = -1,
+	p_placement_variants: Array[int] = [],
 ) -> void:
 	id = p_id
 	name = p_name
@@ -77,8 +92,21 @@ func _init(
 	hardness = p_hardness
 	plant = p_plant
 	drop_tile_id = p_drop_tile_id if p_drop_tile_id >= 0 else p_id
+	placement_variants = p_placement_variants.duplicate()
 
 
 ## Returns properties for a tile ID, or null for empty / water tiles.
 static func get_properties(tile_id: int) -> TileProperties:
 	return registry.get(tile_id)
+
+
+## Returns the concrete tile ID that should be written when placing this tile.
+## If the tile defines visual variants, one is chosen randomly.
+static func resolve_placement_tile_id(tile_id: int) -> int:
+	var props := get_properties(tile_id)
+	if props == null:
+		return tile_id
+	if props.placement_variants.is_empty():
+		return tile_id
+	var variant_index: int = randi() % props.placement_variants.size()
+	return props.placement_variants[variant_index]

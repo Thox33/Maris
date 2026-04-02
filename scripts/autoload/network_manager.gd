@@ -11,6 +11,9 @@ signal connection_succeeded
 signal connection_failed
 signal server_disconnected
 signal ping_updated(ping_ms: float)
+## Emitted after the session shutdown path ran local cleanup and closed the peer.
+## reason: "user_left" | "connection_lost" | "connection_failed" | "app_quit"
+signal session_ended(reason: String)
 
 ## Stores connected player info. Key = peer_id, Value = player data dict.
 var players: Dictionary = {}
@@ -19,6 +22,7 @@ var ping_ms: float = 0.0
 var _ping_timer: float = 0.0
 var _next_ping_id: int = 1
 var _pending_pings: Dictionary = {}
+var _is_leaving: bool = false
 
 
 func _ready() -> void:
@@ -73,15 +77,20 @@ func join_game(address: String = "127.0.0.1", port: int = GameConstants.DEFAULT_
 	return OK
 
 
-func leave_game() -> void:
+func leave_game(reason: String = "user_left") -> void:
+	if _is_leaving:
+		return
+	_is_leaving = true
+	GameEvents.game_leaving.emit()
 	if multiplayer.multiplayer_peer != null:
 		multiplayer.multiplayer_peer.close()
 		multiplayer.multiplayer_peer = null
-
 	players.clear()
 	ping_ms = 0.0
 	_ping_timer = 0.0
 	_pending_pings.clear()
+	_is_leaving = false
+	session_ended.emit(reason)
 
 
 func _on_peer_connected(id: int) -> void:
@@ -103,13 +112,13 @@ func _on_connected_to_server() -> void:
 
 
 func _on_connection_failed() -> void:
-	leave_game()
+	leave_game("connection_failed")
 	connection_failed.emit()
 	push_warning("Connection to server failed")
 
 
 func _on_server_disconnected() -> void:
-	leave_game()
+	leave_game("connection_lost")
 	server_disconnected.emit()
 	push_warning("Disconnected from server")
 

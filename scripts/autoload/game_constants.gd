@@ -60,6 +60,12 @@ const ITEM_PICKUP_DELAY: float = 0.5
 const ITEM_DESPAWN_TIME: float = 300.0
 ## Vertical oscillation speed for floating items (pixels/sec).
 const ITEM_FLOAT_SPEED: float = 8.0
+
+# --- Persistence ---
+## Root directory for world saves inside user://.
+const SAVE_DIR: String = "user://saves/"
+## How often (seconds) the server auto-saves the world.
+const AUTO_SAVE_INTERVAL: float = 120.0
 ## Horizontal drift speed for dropped items (pixels/sec).
 const ITEM_DRIFT_SPEED: float = 15.0
 ## Movement speed for dropped items when they are being pulled to a player.

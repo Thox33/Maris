@@ -152,6 +152,10 @@ func _try_pickup(body: Node2D) -> void:
 		return
 
 	var remainder: int = _inventory_manager.server_add_item(peer_id, item_id, count)
+	var picked_up: int = count - remainder
+
+	if picked_up > 0:
+		GameEvents.item_picked_up.emit(peer_id, item_id, picked_up)
 
 	if remainder <= 0:
 		# Fully picked up — remove from world (spawner replicates the despawn).

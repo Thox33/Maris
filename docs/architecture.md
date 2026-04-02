@@ -19,7 +19,7 @@ lobby_ui.tscn  (entry point)
 main.tscn  (game world)
   World (WorldGenerator)
     TerrainLayer (TileMapLayer) - authoritative gameplay tiles
-    CoralLayer (TileMapLayer)   - coral visual overlay + sway shader
+    PlantLayer (TileMapLayer)   - plant/coral visual overlay + sway shader
     ChunkManager
   Players (Node2D)              - populated by MultiplayerSpawner
   PlayerSpawner (MultiplayerSpawner)
@@ -123,7 +123,7 @@ For coral specifically:
 - `coral_cluster`
   - 47-tile terrain set in the main tileset
   - optional duplicates for especially common masks to reduce repetition
-  - mirrored onto `CoralLayer` for sway
+  - mirrored onto `PlantLayer` for sway
 - `coral_plant`
   - 4-8 standalone variants
   - no terrain-connect
@@ -138,7 +138,7 @@ For coral specifically:
 - Tile visuals are resolved generically from `TileProperties`:
   - direct atlas tiles go straight to `TerrainLayer`
   - terrain families use `set_cells_terrain_connect()`
-  - optional overlay layers such as `CoralLayer` mirror the same terrain family visually
+  - optional overlay layers such as `PlantLayer` mirror the same terrain family visually
 - `TerrainLayer` remains the authority for physics and speed checks.
 - Modifications (broken tiles) persist across load/unload cycles in `ChunkData`.
 
@@ -159,9 +159,25 @@ ChunkManager.break_tile (server)
 - **Underwater shader** (`assets/shaders/underwater.gdshader`) - fullscreen wave distortion
   + blue tint. Applied to a `ColorRect` on `CanvasLayer 100`.
 - **Coral sway shader** (`assets/shaders/coral_sway.gdshader`) - vertex displacement on
-  `CoralLayer` only. Neighboring coral tiles get phase/amplitude variation so they do not
+  `PlantLayer` only. Neighboring coral tiles get phase/amplitude variation so they do not
   move in lockstep.
 - **Bubbles** - `CPUParticles2D` in `UnderwaterEffects`, local player only.
+
+### CanvasLayer convention
+
+Use `CanvasLayer` to separate world rendering, fullscreen effects, and UI:
+
+- `0` - world rendering (default gameplay scene content)
+- `50` - world-adjacent overlays/effects if needed later
+- `100` - fullscreen world effects such as the underwater distortion/tint
+- `110` - HUD such as hotbar, status bars, and crosshair
+- `120` - menus and windows such as inventory, crafting, and session UI
+- `130` - modal popups and debug overlays
+
+Rule of thumb:
+
+- Content at or below `100` is allowed to be affected by fullscreen world shaders.
+- UI that must remain crisp and readable belongs above `100`.
 
 ## Underwater Physics
 
