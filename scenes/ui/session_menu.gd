@@ -15,8 +15,7 @@ func _ready() -> void:
 	_root.visible = false
 	_resume_button.pressed.connect(_on_resume_pressed)
 	_return_button.pressed.connect(_on_return_pressed)
-	NetworkManager.server_disconnected.connect(_on_server_disconnected)
-	NetworkManager.connection_failed.connect(_on_connection_failed)
+	NetworkManager.session_ended.connect(_on_session_ended)
 	_update_content()
 
 
@@ -35,20 +34,23 @@ func _on_resume_pressed() -> void:
 
 
 func _on_return_pressed() -> void:
-	NetworkManager.leave_game()
-	get_tree().change_scene_to_file("res://scenes/ui/lobby_ui.tscn")
+	if _disconnect_mode:
+		# Session already torn down by the network event — just navigate.
+		get_tree().change_scene_to_file("res://scenes/ui/lobby_ui.tscn")
+	else:
+		# leave_game() will emit session_ended, which triggers navigation.
+		NetworkManager.leave_game("user_left")
 
 
-func _on_server_disconnected() -> void:
-	_disconnect_mode = true
-	_root.visible = true
-	_update_content()
-
-
-func _on_connection_failed() -> void:
-	_disconnect_mode = true
-	_root.visible = true
-	_update_content()
+func _on_session_ended(reason: String) -> void:
+	if reason == "app_quit":
+		return
+	if reason == "connection_lost":
+		_disconnect_mode = true
+		_root.visible = true
+		_update_content()
+	else:
+		get_tree().change_scene_to_file("res://scenes/ui/lobby_ui.tscn")
 
 
 func _update_content() -> void:

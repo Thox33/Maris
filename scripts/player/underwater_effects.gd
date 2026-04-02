@@ -1,16 +1,18 @@
 extends Node2D
-## Spawns ambient underwater particle effects around the local player.
-## Adds bubble particles and a fullscreen water distortion shader.
+## Spawns ambient bubble particles around the local player.
+## World-space effect — bubbles exist at a position in the game world,
+## so they correctly live on the Player node.
+##
+## The fullscreen underwater shader overlay is owned by ScreenEffects in
+## main.tscn — not here.
 
 var _bubbles: CPUParticles2D
-var _water_overlay: ColorRect
 
 
 func _ready() -> void:
 	if not get_parent().is_multiplayer_authority():
 		return
 	_setup_bubbles()
-	_setup_water_shader()
 
 
 func _setup_bubbles() -> void:
@@ -49,28 +51,3 @@ func _setup_bubbles() -> void:
 
 	_bubbles.z_index = 5
 	add_child(_bubbles)
-
-
-func _setup_water_shader() -> void:
-	var shader := load("res://assets/shaders/underwater.gdshader") as Shader
-	if shader == null:
-		return
-
-	var mat := ShaderMaterial.new()
-	mat.shader = shader
-
-	# CanvasLayer so it renders on top of everything.
-	var layer := CanvasLayer.new()
-	layer.layer = 100
-
-	_water_overlay = ColorRect.new()
-	_water_overlay.material = mat
-	_water_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	# Set size explicitly — anchors don't resolve until the node is in the tree.
-	_water_overlay.size = get_viewport_rect().size
-	get_viewport().size_changed.connect(
-		func() -> void: _water_overlay.size = get_viewport_rect().size
-	)
-
-	layer.add_child(_water_overlay)
-	get_tree().get_root().call_deferred("add_child", layer)

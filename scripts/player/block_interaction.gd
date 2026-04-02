@@ -32,6 +32,8 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
+	if multiplayer.multiplayer_peer == null:
+		return
 	if not _player.is_multiplayer_authority():
 		return
 
@@ -102,6 +104,8 @@ func _handle_placing() -> void:
 
 
 func _request_place_block(coord: Vector2i) -> void:
+	if multiplayer.multiplayer_peer == null:
+		return
 	if multiplayer.is_server():
 		_inventory_manager._request_place_block(selected_hotbar_slot, coord.x, coord.y)
 	else:

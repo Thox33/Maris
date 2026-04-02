@@ -32,6 +32,7 @@ func _ready() -> void:
 	_slot_panels[_selected_index].add_theme_stylebox_override("panel", _style_selected)
 
 	_inventory_manager.local_slot_changed.connect(_on_slot_changed)
+	_inventory_manager.local_inventory_synced.connect(_refresh_all_slots)
 	_refresh_all_slots()
 
 

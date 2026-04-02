@@ -3,8 +3,8 @@ shader_type canvas_item;
 // Apply as a material on the TerrainLayer or a secondary overlay layer.
 // Uses per-tile phase/amplitude variation so neighboring corals do not move in lockstep.
 
-uniform float sway_amount : hint_range(0.0, 5.0) = 2.5;
-uniform float sway_speed : hint_range(0.1, 3.0) = 1.3;
+uniform float sway_amount : hint_range(0.0, 5.0) = 4;
+uniform float sway_speed : hint_range(0.1, 3.0) = 3;
 uniform float tile_size = 16.0;
 uniform float phase_jitter : hint_range(0.0, 6.28) = 2.4;
 uniform float amplitude_jitter : hint_range(0.0, 1.0) = 0.35;

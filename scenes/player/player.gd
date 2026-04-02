@@ -23,11 +23,15 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
+	if multiplayer.multiplayer_peer == null:
+		return
 	if not is_multiplayer_authority():
 		_update_remote_motion(delta)
 
 
 func _physics_process(delta: float) -> void:
+	if multiplayer.multiplayer_peer == null:
+		return
 	if not is_multiplayer_authority():
 		return
 
@@ -119,5 +123,7 @@ func _get_tile_speed_factor() -> float:
 
 @rpc("authority", "unreliable")
 func _sync_state(pos: Vector2, vel: Vector2) -> void:
+	if multiplayer.multiplayer_peer == null:
+		return
 	if not is_multiplayer_authority():
 		_push_remote_state(pos, vel)

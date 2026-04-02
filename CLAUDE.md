@@ -11,7 +11,7 @@ Godot 4.6, GDScript, host-as-server multiplayer. Terraria-inspired but entirely 
 Main (Node2D)                         scenes/main/main.gd
 ├── World (WorldGenerator)            scenes/world/world_generator.gd
 │   ├── TerrainLayer (TileMapLayer)   terrain_tileset.tres
-│   ├── CoralLayer (TileMapLayer)     terrain_tileset.tres  ← coral-only, carries coral_sway shader
+│   ├── PlantLayer (TileMapLayer)     terrain_tileset.tres  ← plant/coral overlay, carries coral_sway shader
 │   └── ChunkManager (Node)           scripts/world/chunk_manager.gd
 ├── Players (Node2D)
 │   └── <PeerId> (CharacterBody2D)    scenes/player/player.gd
@@ -34,7 +34,7 @@ Main (Node2D)                         scenes/main/main.gd
 - `ChunkManager` checks player positions every 0.2s, load radius=3, unload radius=5 (hysteresis)
 - Host generates chunks from noise, clients request via RPC
 - `ChunkData` stores base_tiles + modifications separately (compact save format)
-- Coral tiles are mirrored onto `CoralLayer` for the sway shader; `TerrainLayer` remains the authority for physics/speed checks
+- Plant/coral tiles are mirrored onto `PlantLayer` for the sway shader; `TerrainLayer` remains the authority for physics/speed checks
 
 ### Tile System
 - 3 tile types: Sand (solid), Stone (solid), Coral (swim-through, slows to 40%)
@@ -93,14 +93,55 @@ Main (Node2D)                         scenes/main/main.gd
 - Player position: authority → all peers (unreliable)
 
 ### Visual Effects
-- `underwater.gdshader` — fullscreen wave distortion + blue tint (active, on CanvasLayer 100)
-- `coral_sway.gdshader` — vertex displacement on `CoralLayer` (active)
-- `UnderwaterEffects` — CPUParticles2D bubbles + water shader overlay (local player only)
-- Underwater shader ColorRect size set explicitly from `get_viewport_rect()` + `size_changed` signal
+Three-layer separation: World-Rendering | Screen-Effects | Gameplay-Data
+
+- `coral_sway.gdshader` — vertex displacement on `PlantLayer` (World-layer, active)
+- `underwater.gdshader` — fullscreen wave distortion + blue tint (Screen-layer)
+  - Owned by `ScreenEffects` node in `main.tscn` (CanvasLayer 100 → ColorRect)
+  - `ScreenEffects.set_underwater(bool)` to toggle — currently always on
+  - ColorRect size set from `get_viewport_rect()` + `size_changed` signal
+- `UnderwaterEffects` — CPUParticles2D bubbles only (World-layer, local player only)
+  - Bubbles are world-space → correctly live on the Player node
+
+### Screen Effects Architecture
+New effects go in `ScreenEffects` (scripts/main/screen_effects.gd), not on Player:
+- Damage flash, vignette, pause blur → add method + ColorRect/node to ScreenEffects
+- Player detects state → emits event or calls ScreenEffects directly
+- Player is the trigger, ScreenEffects is the owner
+
+CanvasLayer convention:
+- `0` world
+- `100` fullscreen world shaders/effects
+- `110` HUD
+- `120` menus/windows
+- `130` modal/debug
+- UI that must not be distorted by fullscreen shaders must live above `100`
 
 ## Autoloads
 - `GameConstants` — all tuning values (tile size, chunk config, swim speeds, network, inventory, item drops)
+- `GameEvents` — central event bus (decouples systems via signals)
 - `NetworkManager` — ENet multiplayer, signals for connect/disconnect
+- `SaveManager` — world persistence (server-only writes), atomic file I/O
+
+### GameEvents (Event Bus)
+- `game_leaving` — fired by NetworkManager before peer closes (any disconnect path)
+- `block_broken(coord, tile_id)` — fired by ChunkManager after break (server-side)
+- `block_placed(coord, tile_id)` — fired by ChunkManager after place (server-side)
+- `player_joined(peer_id)` — fired by Main after full join sequence
+- `player_left(peer_id)` — fired by Main before disconnect cleanup
+- `item_picked_up(peer_id, item_id, count)` — fired by ItemEntity after pickup
+- New systems (sound, particles, achievements) connect to GameEvents — no direct coupling needed
+
+### Save System
+- Directory layout: `user://saves/<world_name>/` with `world.json`, `chunks/`, `players/`
+- Only chunk **modifications** are saved (base terrain regenerated from seed)
+- Atomic writes: data → `.tmp` file → rename (crash-safe)
+- Chunks saved on unload, restored on load via `_generate_and_restore()`
+- Player state (position + inventory) saved on disconnect, restored on join
+- Auto-save every 120s (configurable via `GameConstants.AUTO_SAVE_INTERVAL`)
+- Full save on window close (`NOTIFICATION_WM_CLOSE_REQUEST`)
+- Player identity: keyed by `peer_id` (string) — swap to persistent IDs when lobby adds player names
+- `SAVE_VERSION` constant for future format migrations
 
 ## Conventions
 - GDScript style enforced via `gdtoolkit` (gdlint + gdformat)

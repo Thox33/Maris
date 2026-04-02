@@ -20,8 +20,6 @@ Tiles should visually blend with same-type neighbors (coral colony, seamless san
 **Chunk border handling:** Godot's terrain API updates border tiles of adjacent
 chunks automatically when a new chunk is applied. No extra code needed.
 
-**Effort:** Mostly asset work (sprite sheets). Code change is ~5 lines in chunk_manager.gd.
-
 ---
 
 ### Inventory + Item Data Model
