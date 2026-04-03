@@ -1,6 +1,8 @@
 extends CanvasLayer
 ## In-game session UI for disconnect handling and returning to the lobby.
 
+const MENU_STYLES := preload("res://scripts/ui/menu_styles.gd")
+
 @onready var _root: Control = $Root
 @onready var _title_label: Label = $Root/PanelContainer/VBoxContainer/TitleLabel
 @onready var _message_label: Label = $Root/PanelContainer/VBoxContainer/MessageLabel
@@ -13,6 +15,7 @@ var _disconnect_mode: bool = false
 func _ready() -> void:
 	visible = true
 	_root.visible = false
+	_root.theme = MENU_STYLES.create_theme()
 	_resume_button.pressed.connect(_on_resume_pressed)
 	_return_button.pressed.connect(_on_return_pressed)
 	NetworkManager.session_ended.connect(_on_session_ended)

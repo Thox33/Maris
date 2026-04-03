@@ -7,6 +7,7 @@ extends Node
 
 signal player_connected(peer_id: int)
 signal player_disconnected(peer_id: int)
+signal player_identity_updated(peer_id: int, display_name: String, character_name: String)
 signal connection_succeeded
 signal connection_failed
 signal server_disconnected
@@ -93,6 +94,45 @@ func leave_game(reason: String = "user_left") -> void:
 	session_ended.emit(reason)
 
 
+func set_player_display_name(peer_id: int, display_name: String) -> void:
+	if peer_id <= 0:
+		return
+
+	var safe_name := _normalize_display_name(peer_id, display_name)
+	var player_data := players.get(peer_id, {}) as Dictionary
+	player_data["display_name"] = safe_name
+	players[peer_id] = player_data
+	player_identity_updated.emit(peer_id, safe_name, get_player_character_name(peer_id))
+
+
+func set_player_character_name(peer_id: int, character_name: String) -> void:
+	if peer_id <= 0:
+		return
+
+	var safe_name := _sanitize_character_name(character_name)
+	var player_data := players.get(peer_id, {}) as Dictionary
+	player_data["character_name"] = safe_name
+	players[peer_id] = player_data
+	player_identity_updated.emit(peer_id, get_player_display_name(peer_id), safe_name)
+
+
+func get_player_display_name(peer_id: int) -> String:
+	return _normalize_display_name(peer_id, String((players.get(peer_id, {}) as Dictionary).get("display_name", "")))
+
+
+func get_player_character_name(peer_id: int) -> String:
+	return _sanitize_character_name(
+		String((players.get(peer_id, {}) as Dictionary).get("character_name", ""))
+	)
+
+
+func get_player_visible_name(peer_id: int) -> String:
+	var character_name := get_player_character_name(peer_id)
+	if not character_name.is_empty():
+		return character_name
+	return get_player_display_name(peer_id)
+
+
 func _on_peer_connected(id: int) -> void:
 	players[id] = {}
 	player_connected.emit(id)
@@ -156,3 +196,24 @@ func _pong_client(ping_id: int) -> void:
 	_pending_pings.erase(ping_id)
 	ping_ms = (Time.get_ticks_usec() - sent_usec) / 1000.0
 	ping_updated.emit(ping_ms)
+
+
+@rpc("authority", "reliable")
+func _sync_player_identities(snapshot: Array) -> void:
+	for entry: Dictionary in snapshot:
+		var peer_id := int(entry.get("peer_id", 0))
+		var display_name := String(entry.get("display_name", ""))
+		var character_name := String(entry.get("character_name", ""))
+		set_player_display_name(peer_id, display_name)
+		set_player_character_name(peer_id, character_name)
+
+
+func _normalize_display_name(peer_id: int, display_name: String) -> String:
+	var safe_name := display_name.strip_edges().left(32)
+	if safe_name.is_empty():
+		safe_name = "Player %d" % peer_id
+	return safe_name
+
+
+func _sanitize_character_name(character_name: String) -> String:
+	return character_name.strip_edges().left(24)

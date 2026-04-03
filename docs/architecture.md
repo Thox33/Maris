@@ -13,8 +13,9 @@ Godot's built-in `MultiplayerAPI` with `ENetMultiplayerPeer`. One player acts as
 
 ```text
 lobby_ui.tscn  (entry point)
-  Host pressed   -> NetworkManager.host_game() -> change_scene_to "main.tscn"
-  Join succeeded -> NetworkManager.join_game() -> change_scene_to "main.tscn"
+  Host World     -> NetworkManager.host_game() -> change_scene_to "main.tscn"
+  Join World     -> NetworkManager.join_game() -> change_scene_to "main.tscn"
+  Settings       -> local profile/settings only
 
 main.tscn  (game world)
   World (WorldGenerator)
@@ -23,6 +24,7 @@ main.tscn  (game world)
     ChunkManager
   Players (Node2D)              - populated by MultiplayerSpawner
   PlayerSpawner (MultiplayerSpawner)
+  CharacterSetup (CanvasLayer)  - shown when a world has no character for this account
 ```
 
 ## Player Spawning Flow
@@ -38,7 +40,12 @@ Client _ready()
 
 Host receives _client_ready from client
   -> _receive_world_seed.rpc_id(sender, seed)
-  -> PlayerSpawner.spawn({peer_id, x, y})   <- replicates to all peers automatically
+  -> if world has no character for account_id:
+       open character setup
+       wait for character submit
+  -> else:
+       PlayerSpawner.spawn({peer_id, x, y, character_name, appearance})
+         <- replicates to all peers automatically
 
 Client receives _receive_world_seed
   -> world.initialize(seed)
@@ -47,6 +54,29 @@ Client receives _receive_world_seed
 
 `MultiplayerSpawner` calls `_create_player(data)` on every peer to reconstruct the node,
 including setting `multiplayer_authority`. No manual `_request_spawn_player` RPC needed.
+
+## Identity & Persistence
+
+- `peer_id` is session-local network identity only.
+- `account_id` is the persistent player identity used for saves.
+- Current provider format: `local:<client_id>`.
+- Player saves are keyed by `(world, account_id)`, not by `peer_id`.
+- Each world stores exactly one character per `account_id`.
+
+Normalized player save shape:
+
+```text
+account
+  account_id
+  display_name
+character
+  name
+  appearance
+progress
+  x, y, inventory
+```
+
+Legacy flat saves are normalized on load so old worlds remain readable.
 
 ## Autoloads (Singletons)
 

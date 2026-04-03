@@ -61,6 +61,10 @@ const ITEM_DESPAWN_TIME: float = 300.0
 ## Vertical oscillation speed for floating items (pixels/sec).
 const ITEM_FLOAT_SPEED: float = 8.0
 
+# --- Chat ---
+## Maximum character length of a single chat message.
+const MAX_CHAT_LENGTH: int = 200
+
 # --- Persistence ---
 ## Root directory for world saves inside user://.
 const SAVE_DIR: String = "user://saves/"

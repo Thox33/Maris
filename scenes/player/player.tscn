@@ -6,6 +6,8 @@
 [ext_resource type="Script" uid="uid://bs2bngwgcb1mh" path="res://scripts/player/underwater_effects.gd" id="4"]
 [ext_resource type="PackedScene" path="res://scenes/ui/hotbar_ui.tscn" id="5"]
 [ext_resource type="PackedScene" path="res://scenes/ui/debug_overlay.tscn" id="6"]
+[ext_resource type="PackedScene" path="res://scenes/ui/chat_ui.tscn" id="7"]
+[ext_resource type="Script" path="res://scripts/ui/overhead_source.gd" id="8"]
 
 [sub_resource type="RectangleShape2D" id="1"]
 size = Vector2(12, 14)
@@ -20,6 +22,13 @@ shape = SubResource("1")
 [node name="Sprite2D" type="Sprite2D" parent="." unique_id=1232885156]
 texture = ExtResource("2")
 
+[node name="OverheadAnchor" type="Marker2D" parent="." unique_id=135450981]
+position = Vector2(0, -18)
+
+[node name="OverheadSource" type="Node" parent="." unique_id=1332844297]
+script = ExtResource("8")
+anchor_path = NodePath("../OverheadAnchor")
+
 [node name="Camera2D" type="Camera2D" parent="." unique_id=1258340736]
 zoom = Vector2(3, 3)
 
@@ -32,3 +41,5 @@ script = ExtResource("4")
 [node name="HotbarUI" parent="." unique_id=205629377 instance=ExtResource("5")]
 
 [node name="DebugOverlay" parent="." unique_id=2006877933 instance=ExtResource("6")]
+
+[node name="ChatUI" parent="." unique_id=312847651 instance=ExtResource("7")]

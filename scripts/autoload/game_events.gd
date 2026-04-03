@@ -37,7 +37,7 @@ signal player_joined(peer_id: int)
 ## A player is about to leave: state saved, cleanup about to start.
 ## Fired by: Main
 @warning_ignore("unused_signal")
-signal player_left(peer_id: int)
+signal player_left(peer_id: int, visible_name: String)
 
 # --- Item events (server-side) ---
 

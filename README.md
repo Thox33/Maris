@@ -4,7 +4,8 @@
 
 ## Current Status
 
-- Multiplayer lobby flow with host/join
+- Multiplayer lobby flow with host/join and a simplified main menu
+- World-bound character creation on first join
 - Procedural chunk-based world generation
 - Block breaking and placing
 - Inventory, hotbar, and item pickup/drop loop
@@ -58,6 +59,6 @@ Recommended flow:
 
 ## Near-Term Priorities
 
-- World persistence
+- Character editing from lobby/in-game menu
 - Biomes and more tile variety
 - Sound and music

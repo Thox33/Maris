@@ -8,7 +8,7 @@ extends Node
 ##   ├── chunks/
 ##   │   └── chunk_<x>_<y>.dat        ← binary, modifications only
 ##   └── players/
-##       └── player_<id>.json         ← inventory, position, stats
+##       └── player_<storage_key>.json ← inventory, position, stats
 
 ## Current save format version. Bump when the on-disk format changes,
 ## then add migration logic in _migrate_world_meta().
@@ -49,6 +49,24 @@ func set_world(world_name: String) -> void:
 ## Returns true if a save for the given world name exists on disk.
 func has_world_save(world_name: String) -> bool:
 	return FileAccess.file_exists(GameConstants.SAVE_DIR + world_name + "/world.json")
+
+
+## Returns all world names that have a world.json on disk, sorted alphabetically.
+func list_worlds() -> Array[String]:
+	var result: Array[String] = []
+	var dir := DirAccess.open(GameConstants.SAVE_DIR)
+	if dir == null:
+		return result
+	dir.list_dir_begin()
+	var entry := dir.get_next()
+	while entry != "":
+		if dir.current_is_dir() and entry != "." and entry != "..":
+			if has_world_save(entry):
+				result.append(entry)
+		entry = dir.get_next()
+	dir.list_dir_end()
+	result.sort()
+	return result
 
 
 ## Returns the active world name (empty string if none set).
@@ -124,18 +142,72 @@ func save_all_chunks(loaded_chunks: Dictionary) -> void:
 
 
 ## Saves player state (inventory, position) to disk.
-func save_player(player_id: String, data: Dictionary) -> void:
-	_write_json(_player_path(player_id), data)
+## account_id is the canonical persistent identity key, e.g. local:<client_id>.
+func save_player(account_id: String, data: Dictionary) -> void:
+	var normalized := normalize_player_record(account_id, data)
+	_write_json(_player_path(account_id), normalized)
 
 
 ## Loads player state from disk. Returns empty Dictionary if no save exists.
-func load_player(player_id: String) -> Dictionary:
-	return _read_json(_player_path(player_id))
+## Supports the legacy client_id filename format for backwards compatibility.
+func load_player(account_id: String) -> Dictionary:
+	var path := _player_path(account_id)
+	var data := _read_json(path)
+	if not data.is_empty():
+		return normalize_player_record(account_id, data)
+
+	for legacy_path: String in _legacy_player_paths(account_id):
+		data = _read_json(legacy_path)
+		if not data.is_empty():
+			return normalize_player_record(account_id, data)
+	return {}
 
 
 ## Returns true if a save file exists for the given player.
-func has_player_save(player_id: String) -> bool:
-	return FileAccess.file_exists(_player_path(player_id))
+func has_player_save(account_id: String) -> bool:
+	if FileAccess.file_exists(_player_path(account_id)):
+		return true
+	for legacy_path: String in _legacy_player_paths(account_id):
+		if FileAccess.file_exists(legacy_path):
+			return true
+	return false
+
+
+## Returns true when this world already has a character record for the account.
+## The existence of the character section is what later drives character creation.
+func has_character(account_id: String) -> bool:
+	var record := load_player(account_id)
+	return not get_character_record(record).is_empty()
+
+
+## Normalizes both legacy saves and new saves to a stable record shape:
+## {
+##   "account": { "account_id", "display_name" },
+##   "character": { ... },
+##   "progress": { "x", "y", "inventory" }
+## }
+func normalize_player_record(account_id: String, raw: Dictionary) -> Dictionary:
+	var normalized := {
+		"account": _normalize_account_record(account_id, raw),
+		"character": _normalize_character_record(raw),
+		"progress": _normalize_progress_record(raw),
+	}
+	return normalized
+
+
+func get_account_record(record: Dictionary) -> Dictionary:
+	var account: Variant = record.get("account", {})
+	return account if account is Dictionary else {}
+
+
+func get_character_record(record: Dictionary) -> Dictionary:
+	var character: Variant = record.get("character", {})
+	return character if character is Dictionary else {}
+
+
+func get_progress_record(record: Dictionary) -> Dictionary:
+	var progress: Variant = record.get("progress", {})
+	return progress if progress is Dictionary else {}
 
 
 # --- Internal helpers ---
@@ -145,8 +217,58 @@ func _chunk_path(coord: Vector2i) -> String:
 	return _world_dir + "chunks/chunk_%d_%d.dat" % [coord.x, coord.y]
 
 
-func _player_path(player_id: String) -> String:
-	return _world_dir + "players/player_" + player_id + ".json"
+func _player_path(account_id: String) -> String:
+	return _world_dir + "players/player_%s.json" % _storage_key(account_id)
+
+
+func _legacy_player_paths(account_id: String) -> Array[String]:
+	var paths: Array[String] = []
+	var local_client_id := ClientProfile.get_local_client_id(account_id)
+	if not local_client_id.is_empty():
+		paths.append(_world_dir + "players/" + local_client_id + ".json")
+
+	return paths
+
+
+func _storage_key(raw_id: String) -> String:
+	return raw_id.sha256_text()
+
+
+func _normalize_account_record(account_id: String, raw: Dictionary) -> Dictionary:
+	var account: Variant = raw.get("account", {})
+	if not (account is Dictionary):
+		account = {}
+
+	return {
+		"account_id": String(account.get("account_id", raw.get("account_id", account_id))),
+		"display_name": String(account.get("display_name", raw.get("display_name", ""))),
+	}
+
+
+func _normalize_character_record(raw: Dictionary) -> Dictionary:
+	var character: Variant = raw.get("character", {})
+	if character is Dictionary:
+		return character
+	return {}
+
+
+func _normalize_progress_record(raw: Dictionary) -> Dictionary:
+	var progress: Variant = raw.get("progress", {})
+	if not (progress is Dictionary):
+		progress = {}
+
+	var x: Variant = progress.get("x", raw.get("x", null))
+	var y: Variant = progress.get("y", raw.get("y", null))
+	var inventory: Variant = progress.get("inventory", raw.get("inventory", null))
+
+	var normalized: Dictionary = {}
+	if x != null:
+		normalized["x"] = x
+	if y != null:
+		normalized["y"] = y
+	if inventory != null:
+		normalized["inventory"] = inventory
+	return normalized
 
 
 ## Writes a Dictionary as pretty-printed JSON with atomic rename.

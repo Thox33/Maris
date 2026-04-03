@@ -3,6 +3,7 @@ extends CanvasLayer
 
 var _player: CharacterBody2D
 var _label: Label
+var _chunk_debug_overlay: Node
 
 
 func _ready() -> void:
@@ -14,7 +15,9 @@ func _ready() -> void:
 		return
 
 	_label = $MarginContainer/PanelContainer/Label
+	_chunk_debug_overlay = get_tree().get_root().get_node_or_null("Main/World/ChunkDebugCanvas/ChunkDebugOverlay")
 	visible = false
+	_set_debug_visible(false)
 	_update_text()
 
 	if NetworkManager.has_signal("ping_updated"):
@@ -24,7 +27,7 @@ func _ready() -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.physical_keycode == KEY_F3:
-			visible = not visible
+			_set_debug_visible(not visible)
 			if visible:
 				_update_text()
 			get_viewport().set_input_as_handled()
@@ -38,6 +41,12 @@ func _process(_delta: float) -> void:
 func _on_ping_updated(_ping_ms: float) -> void:
 	if visible:
 		_update_text()
+
+
+func _set_debug_visible(value: bool) -> void:
+	visible = value
+	if _chunk_debug_overlay != null:
+		_chunk_debug_overlay.set_enabled(value)
 
 
 func _update_text() -> void:

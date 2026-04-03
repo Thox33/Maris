@@ -34,9 +34,10 @@ Prerequisite for: block placing, crafting, drops, chests, hotbar.
 ### World Persistence (Save / Load)
 ChunkData already has `base_tiles` + `modifications` separately - the hard part is done.
 
-- Define save file format (one file per chunk, or one big world file)
-- `FileAccess` for reading/writing
-- Decide: save on chunk unload, or periodic + on quit
+- [x] World metadata + chunk/player save files
+- [x] Periodic save + on-quit save
+- [x] Stable `account_id` save keys instead of `peer_id`
+- [x] World-bound character record (`account` / `character` / `progress`)
 
 ---
 
@@ -51,6 +52,7 @@ ChunkData already has `base_tiles` + `modifications` separately - the hard part 
 - [ ] Crafting
 - [ ] Chests / loot
 - [ ] Water currents (push player in a direction)
+- [ ] Character editing after first creation
 
 ---
 
@@ -68,6 +70,8 @@ ChunkData already has `base_tiles` + `modifications` separately - the hard part 
 
 ## Technical / Infrastructure
 
+- [ ] Shared settings screen between lobby and in-game menu
+- [ ] Stronger identity provider later (e.g. Steam-backed account identity)
 - [ ] `MultiplayerSynchronizer` for property sync (health, state) - complement to spawner
 - [ ] Async chunk generation (ResourceLoader threaded load, no frame spikes)
 - [ ] TileSet custom data layers (per-tile metadata: light emission, spawn weight, biome tag)

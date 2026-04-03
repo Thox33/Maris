@@ -3,6 +3,8 @@ extends CharacterBody2D
 ## Only the owning peer processes input. Remote peers are rendered from a
 ## short snapshot buffer for smoother movement.
 
+const CHARACTER_APPEARANCE := preload("res://scripts/player/character_appearance.gd")
+
 @export var swim_speed: float = GameConstants.SWIM_SPEED
 @export var swim_acceleration: float = GameConstants.SWIM_ACCELERATION
 @export var swim_friction: float = GameConstants.SWIM_FRICTION
@@ -10,6 +12,10 @@ extends CharacterBody2D
 var _chunk_manager: Node
 var _sync_timer: float = 0.0
 var _state_buffer: Array[Dictionary] = []
+@onready var _overhead_source: OverheadSource = $OverheadSource
+@onready var _sprite: Sprite2D = $Sprite2D
+
+var _character_name: String = ""
 
 
 func _ready() -> void:
@@ -20,6 +26,9 @@ func _ready() -> void:
 
 	if not is_multiplayer_authority():
 		_push_remote_state(position, Vector2.ZERO)
+
+	NetworkManager.player_identity_updated.connect(_on_player_identity_updated)
+	_refresh_overhead()
 
 
 func _process(delta: float) -> void:
@@ -33,6 +42,11 @@ func _physics_process(delta: float) -> void:
 	if multiplayer.multiplayer_peer == null:
 		return
 	if not is_multiplayer_authority():
+		return
+
+	if ChatManager.is_chat_open:
+		velocity = velocity.move_toward(Vector2.ZERO, swim_friction * delta)
+		move_and_slide()
 		return
 
 	var input_dir := Vector2.ZERO
@@ -127,3 +141,55 @@ func _sync_state(pos: Vector2, vel: Vector2) -> void:
 		return
 	if not is_multiplayer_authority():
 		_push_remote_state(pos, vel)
+
+
+func apply_server_teleport(pos: Vector2) -> void:
+	if multiplayer.multiplayer_peer == null:
+		return
+	if multiplayer.is_server():
+		_apply_server_teleport(pos)
+		var authority_id := get_multiplayer_authority()
+		if authority_id != multiplayer.get_unique_id():
+			_apply_server_teleport.rpc_id(authority_id, pos)
+	else:
+		_apply_server_teleport(pos)
+
+
+@rpc("any_peer", "reliable", "call_local")
+func _apply_server_teleport(pos: Vector2) -> void:
+	if not multiplayer.is_server():
+		var sender_id := multiplayer.get_remote_sender_id()
+		if sender_id != 1:
+			return
+	position = pos
+	global_position = pos
+	velocity = Vector2.ZERO
+	_sync_timer = 0.0
+	_state_buffer.clear()
+	if not is_multiplayer_authority():
+		_push_remote_state(pos, Vector2.ZERO)
+
+
+func apply_character_data(character_name: String, body_color_preset: String) -> void:
+	_character_name = character_name.strip_edges()
+	if _sprite != null:
+		_sprite.modulate = CHARACTER_APPEARANCE.get_color_for_preset(body_color_preset)
+	_refresh_overhead()
+
+
+func _on_player_identity_updated(peer_id: int, _display_name: String, character_name: String) -> void:
+	if peer_id != get_multiplayer_authority():
+		return
+	_character_name = character_name.strip_edges()
+	_refresh_overhead()
+
+
+func _refresh_overhead() -> void:
+	if _overhead_source == null:
+		return
+	_overhead_source.set_display_name(
+		_character_name
+		if not _character_name.is_empty()
+		else NetworkManager.get_player_visible_name(get_multiplayer_authority())
+	)
+	_overhead_source.set_overhead_visible(not is_multiplayer_authority())

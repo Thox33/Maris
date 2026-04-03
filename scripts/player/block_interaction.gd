@@ -37,6 +37,10 @@ func _process(delta: float) -> void:
 	if not _player.is_multiplayer_authority():
 		return
 
+	if ChatManager.is_chat_open:
+		_reset_breaking()
+		return
+
 	if Input.is_action_pressed("break_block"):
 		_handle_breaking(delta)
 	else:
