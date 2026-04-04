@@ -19,6 +19,7 @@ var item_spawner: MultiplayerSpawner
 
 ## Reference to the chunk manager (set by main.gd).
 var chunk_manager: Node
+var structure_manager: Node
 
 
 # --- Lifecycle (called by main.gd) ---
@@ -198,15 +199,13 @@ func _request_place_block(slot_index: int, tx: int, ty: int) -> void:
 	if item_props == null or not item_props.is_placeable():
 		return
 
-	# Validate: target cell is empty.
+	# Validate: target cell / footprint is placeable.
 	var coord := Vector2i(tx, ty)
 	if chunk_manager == null:
 		return
-	if not chunk_manager.is_cell_empty(coord):
-		return
 
 	# Validate: player is in range.
-	var players_node: Node = get_tree().get_root().get_node_or_null("Main/Players")
+	var players_node: Node = get_tree().get_root().get_node_or_null("Main/World/DepthSorted/Players")
 	if players_node == null:
 		return
 	var player_node := players_node.get_node_or_null(str(sender_id))
@@ -220,5 +219,18 @@ func _request_place_block(slot_index: int, tx: int, ty: int) -> void:
 		return
 
 	# All checks passed — place block and consume item.
-	chunk_manager.place_tile(coord, item_props.tile_id)
+	if item_props.places_tile():
+		if not chunk_manager.is_cell_empty(coord):
+			return
+		if structure_manager != null and structure_manager.is_cell_occupied(coord):
+			return
+		chunk_manager.place_tile(coord, item_props.tile_id)
+	elif item_props.places_structure():
+		if structure_manager == null:
+			return
+		if not structure_manager.place_structure(coord, item_props.structure_id):
+			return
+	else:
+		return
+
 	server_remove_from_slot(sender_id, slot_index)

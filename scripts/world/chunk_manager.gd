@@ -3,6 +3,8 @@ extends Node
 ## Periodically checks player positions and loads/unloads chunks as needed.
 ## Host generates chunks from noise; clients request them via RPC.
 
+const TALL_STRUCTURE_VISUAL_SCENE := preload("res://scenes/world/tall_structure_visual.tscn")
+
 ## Set to false to silence chunk load/unload messages in the console.
 const DEBUG_LOG: bool = false
 
@@ -11,9 +13,13 @@ var world_generator: Node2D
 
 ## Reference to the global TileMapLayer.
 var terrain_layer: TileMapLayer
+var base_visual_layer: TileMapLayer
 
 ## PlantLayer mirror — coral tiles are duplicated here for the sway shader.
 var plant_layer: TileMapLayer
+
+var tall_structure_visuals_node: Node2D
+var _tall_structure_visuals: Dictionary = {}
 
 ## Currently loaded chunks. Key = Vector2i (chunk coord), Value = ChunkData.
 var loaded_chunks: Dictionary = {}
@@ -32,7 +38,9 @@ var _unload_queue: Array[Vector2i] = []
 func _ready() -> void:
 	world_generator = get_parent()
 	terrain_layer = world_generator.get_node("TerrainLayer")
+	base_visual_layer = world_generator.get_node("BaseVisualLayer")
 	plant_layer = world_generator.get_node("PlantLayer")
+	tall_structure_visuals_node = world_generator.get_node("DepthSorted")
 	_players_node = null
 
 
@@ -68,7 +76,7 @@ func _process(delta: float) -> void:
 
 	# Lazily find the Players node.
 	if _players_node == null:
-		_players_node = get_tree().get_root().get_node_or_null("Main/Players")
+		_players_node = world_generator.get_node_or_null("DepthSorted/Players")
 		if _players_node == null:
 			return
 
@@ -180,7 +188,9 @@ func _erase_chunk(coord: Vector2i) -> void:
 		for local_x in range(GameConstants.CHUNK_SIZE):
 			var cell := Vector2i(origin_x + local_x, origin_y + local_y)
 			terrain_layer.erase_cell(cell)
+			base_visual_layer.erase_cell(cell)
 			plant_layer.erase_cell(cell)
+			_erase_tall_structure_visual(cell)
 
 	loaded_chunks.erase(coord)
 
@@ -252,9 +262,6 @@ func break_tile(coord: Vector2i) -> void:
 
 ## Erases a single tile and records the modification in chunk data.
 func _do_break_tile(coord: Vector2i) -> void:
-	terrain_layer.erase_cell(coord)
-	plant_layer.erase_cell(coord)
-
 	var chunk_x: int = floori(float(coord.x) / GameConstants.CHUNK_SIZE)
 	var chunk_y: int = floori(float(coord.y) / GameConstants.CHUNK_SIZE)
 	var chunk_coord := Vector2i(chunk_x, chunk_y)
@@ -263,6 +270,8 @@ func _do_break_tile(coord: Vector2i) -> void:
 		var local_y: int = coord.y - chunk_y * GameConstants.CHUNK_SIZE
 		var chunk: ChunkData = loaded_chunks[chunk_coord]
 		chunk.set_modification(local_x, local_y, -1)
+
+	_apply_cell(coord, TileProperties.EMPTY)
 
 
 ## Client asks host to break a tile.
@@ -310,8 +319,6 @@ func _do_place_tile(coord: Vector2i, tile_id: int) -> void:
 	if props == null:
 		return
 
-	_apply_cell(coord, tile_id)
-
 	# Record modification in chunk data.
 	var chunk_x: int = floori(float(coord.x) / GameConstants.CHUNK_SIZE)
 	var chunk_y: int = floori(float(coord.y) / GameConstants.CHUNK_SIZE)
@@ -321,6 +328,8 @@ func _do_place_tile(coord: Vector2i, tile_id: int) -> void:
 		var local_y: int = coord.y - chunk_y * GameConstants.CHUNK_SIZE
 		var chunk: ChunkData = loaded_chunks[chunk_coord]
 		chunk.set_modification(local_x, local_y, tile_id)
+
+	_apply_cell(coord, tile_id)
 
 
 ## Host tells all clients a tile was placed.
@@ -334,15 +343,65 @@ func _apply_cell(cell: Vector2i, tile_id: int) -> void:
 	var props := TileProperties.get_properties(tile_id)
 	if props == null:
 		terrain_layer.erase_cell(cell)
+		base_visual_layer.erase_cell(cell)
 		plant_layer.erase_cell(cell)
+		_erase_tall_structure_visual(cell)
+	else:
+		terrain_layer.set_cell(cell, 0, props.atlas_coord)
+
+		if props.plant:
+			plant_layer.set_cell(cell, 0, props.atlas_coord)
+		else:
+			plant_layer.erase_cell(cell)
+
+		if props.uses_tall_structure_visual():
+			base_visual_layer.erase_cell(cell)
+			_erase_tall_structure_visual(cell)
+		else:
+			base_visual_layer.set_cell(cell, 0, props.atlas_coord)
+			_erase_tall_structure_visual(cell)
+
+	_sync_tall_structure_visual(cell)
+
+
+func _sync_tall_structure_visual(coord: Vector2i) -> void:
+	var tile_id: int = get_tile_at(coord)
+	var props := TileProperties.get_properties(tile_id)
+	if props == null or not props.uses_tall_structure_visual():
+		_erase_tall_structure_visual(coord)
 		return
 
-	terrain_layer.set_cell(cell, 0, props.atlas_coord)
+	_ensure_tall_structure_visual(coord, props)
 
-	if props.plant:
-		plant_layer.set_cell(cell, 0, props.atlas_coord)
-	else:
-		plant_layer.erase_cell(cell)
+
+func _ensure_tall_structure_visual(coord: Vector2i, props: TileProperties) -> void:
+	var key := _cell_key(coord)
+	var visual := _tall_structure_visuals.get(key) as TallStructureVisual
+	if visual == null:
+		visual = TALL_STRUCTURE_VISUAL_SCENE.instantiate()
+		visual.name = "TallStructure_%s_%s" % [coord.x, coord.y]
+		visual.configure_parts(props.build_tall_structure_parts(GameConstants.TILE_SIZE), false)
+		tall_structure_visuals_node.add_child(visual)
+		_tall_structure_visuals[key] = visual
+
+	visual.position = Vector2(
+		coord.x * GameConstants.TILE_SIZE + GameConstants.TILE_SIZE / 2.0,
+		(coord.y + 1) * GameConstants.TILE_SIZE
+	)
+	visual.configure_parts(props.build_tall_structure_parts(GameConstants.TILE_SIZE), false)
+
+
+func _erase_tall_structure_visual(coord: Vector2i) -> void:
+	var key := _cell_key(coord)
+	var visual := _tall_structure_visuals.get(key) as TallStructureVisual
+	if visual == null:
+		return
+	_tall_structure_visuals.erase(key)
+	visual.queue_free()
+
+
+func _cell_key(coord: Vector2i) -> String:
+	return "%s:%s" % [coord.x, coord.y]
 
 
 ## Returns the tile ID at a world-space tile coordinate from chunk data.

@@ -62,7 +62,7 @@ func _update_text() -> void:
 	var world := get_tree().get_root().get_node_or_null("Main/World")
 	var chunk_manager := world.get_node_or_null("ChunkManager") if world != null else null
 	var items_node := get_tree().get_root().get_node_or_null("Main/Items")
-	var players_node := get_tree().get_root().get_node_or_null("Main/Players")
+	var players_node := get_tree().get_root().get_node_or_null("Main/World/DepthSorted/Players")
 	var tile_coord := Vector2i(
 		floori(_player.global_position.x / GameConstants.TILE_SIZE),
 		floori(_player.global_position.y / GameConstants.TILE_SIZE)

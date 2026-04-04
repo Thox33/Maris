@@ -1,0 +1,14 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/world/tall_structure_visual.gd" id="1"]
+[ext_resource type="Texture2D" path="res://assets/tilesets/terrain_tiles.png" id="2"]
+
+[node name="TallStructureVisual" type="Node2D"]
+script = ExtResource("1")
+atlas_texture = ExtResource("2")
+
+[node name="Parts" type="Node2D" parent="."]
+
+[node name="StaticBody2D" type="StaticBody2D" parent="."]
+collision_layer = 1
+collision_mask = 0

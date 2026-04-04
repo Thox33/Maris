@@ -19,6 +19,7 @@ var world_seed: int = 0
 @onready var terrain_layer: TileMapLayer = $TerrainLayer
 @onready var plant_layer: TileMapLayer = $PlantLayer
 @onready var chunk_manager: Node = $ChunkManager
+@onready var structure_manager: Node = $StructureManager
 
 
 ## Initializes noise with the given seed. Must be called before generate_chunk().
@@ -107,7 +108,6 @@ func _diagnose_and_fix_physics() -> void:
 				td.remove_collision_polygon(0, 0)
 				print("[Physics] FIX: Removed collision polygon from '%s'" % props.name)
 				fixed = true
-
 	if not fixed:
 		print("[Physics] All good — no fixes needed")
 

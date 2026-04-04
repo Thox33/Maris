@@ -18,6 +18,11 @@ func _ready() -> void:
 		"Teleport yourself to tile coordinates: /teleport <x> <y>",
 		_cmd_tp
 	)
+	commands.register(
+		"give",
+		"Give items: /give <item> [count] or /give <player> <item> <count>",
+		_cmd_give
+	)
 	NetworkManager.session_ended.connect(_on_session_ended)
 	GameEvents.player_joined.connect(_on_player_joined)
 	GameEvents.player_left.connect(_on_player_left)
@@ -134,7 +139,7 @@ func _cmd_tp(sender_id: int, args: Array[String]) -> Array[String]:
 	if not args[0].is_valid_int() or not args[1].is_valid_int():
 		return ["Teleport coordinates must be integers."]
 
-	var players := get_tree().get_root().get_node_or_null("Main/Players")
+	var players := get_tree().get_root().get_node_or_null("Main/World/DepthSorted/Players")
 	if players == null:
 		return ["Teleport failed: players container not found."]
 
@@ -161,3 +166,67 @@ func _cmd_tp(sender_id: int, args: Array[String]) -> Array[String]:
 		player.apply_server_teleport(world_pos)
 
 	return ["Teleported to (%d, %d)." % [tile_x, tile_y]]
+
+
+func _cmd_give(sender_id: int, args: Array[String]) -> Array[String]:
+	if args.is_empty():
+		return ["Usage: /give <item> [count] or /give <player> <item> <count>"]
+
+	var target_peer_id := sender_id
+	var item_name := ""
+	var count := 1
+
+	if args.size() == 1:
+		item_name = args[0]
+	elif args.size() == 2:
+		item_name = args[0]
+		if not args[1].is_valid_int():
+			return ["Count must be an integer."]
+		count = args[1].to_int()
+	else:
+		var count_arg := args[args.size() - 1]
+		if not count_arg.is_valid_int():
+			return ["Count must be an integer."]
+		count = count_arg.to_int()
+		item_name = args[args.size() - 2]
+		var player_name := " ".join(args.slice(0, args.size() - 2))
+		target_peer_id = _find_peer_id_by_visible_name(player_name)
+		if target_peer_id <= 0:
+			return ["Player not found: %s" % player_name]
+
+	if count <= 0:
+		return ["Count must be greater than zero."]
+
+	var item_id := ItemProperties.by_name.get(item_name.to_lower(), ItemProperties.NONE) as int
+	if item_id == ItemProperties.NONE:
+		return ["Unknown item: %s" % item_name]
+
+	var inventory_manager := get_tree().get_root().get_node_or_null("Main/InventoryManager")
+	if inventory_manager == null:
+		return ["Give failed: inventory manager not found."]
+
+	var remainder: int = inventory_manager.server_add_item(target_peer_id, item_id, count)
+	var given_count := count - remainder
+	if given_count <= 0:
+		return ["Could not give %s. Inventory is full." % item_name]
+
+	var target_name := NetworkManager.get_player_visible_name(target_peer_id)
+	if remainder > 0:
+		return [
+			"Gave %d %s to %s (%d did not fit)." % [given_count, item_name, target_name, remainder]
+		]
+
+	return ["Gave %d %s to %s." % [given_count, item_name, target_name]]
+
+
+func _find_peer_id_by_visible_name(player_name: String) -> int:
+	var wanted := player_name.strip_edges().to_lower()
+	if wanted.is_empty():
+		return 0
+
+	for peer_id_variant in NetworkManager.players.keys():
+		var peer_id := int(peer_id_variant)
+		if NetworkManager.get_player_visible_name(peer_id).to_lower() == wanted:
+			return peer_id
+
+	return 0

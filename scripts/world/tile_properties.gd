@@ -6,13 +6,34 @@ extends RefCounted
 
 ## Sentinel for empty / open-water cells.
 const EMPTY: int = -1
+const INVALID_ATLAS_COORD := Vector2i(-1, -1)
+
+enum RenderProfile {
+	FLAT,
+	TALL_STRUCTURE,
+}
 
 ## Master registry: stable integer ID -> TileProperties.
 ## To add a tile: append a new entry with the next unused ID.
 ## Atlas layout: row 0 = terrain, row 1 = coral variants.
 static var registry: Dictionary = {
 	0: TileProperties.new(0, "sand", Vector2i(0, 0), true, 1.0, true, 0.8),
-	1: TileProperties.new(1, "stone", Vector2i(1, 0), true, 1.0, true, 2.0),
+	1: TileProperties.new(
+		1,
+		"stone",
+		Vector2i(1, 0),
+		true,
+		1.0,
+		true,
+		2.0,
+		false,
+		-1,
+		[],
+		RenderProfile.TALL_STRUCTURE,
+		Vector2i(2, 0),
+		Vector2i(3, 0),
+		6
+	),
 	2: TileProperties.new(
 		2,
 		"coral",
@@ -69,6 +90,14 @@ var drop_tile_id: int
 ## Optional pool of tile IDs that may be chosen when this tile is placed.
 ## Use this for one gameplay tile with multiple visual variants.
 var placement_variants: Array[int]
+## How this tile should be rendered in the world.
+var render_profile: RenderProfile
+## Atlas coord for the visible body/front face in the world.
+var body_atlas_coord: Vector2i
+## Atlas coord for the cap that overhangs above the block body.
+var cap_atlas_coord: Vector2i
+## How far the cap should protrude upward from the block cell.
+var cap_offset_px: int
 
 
 func _init(
@@ -82,6 +111,10 @@ func _init(
 	p_plant: bool = false,
 	p_drop_tile_id: int = -1,
 	p_placement_variants: Array[int] = [],
+	p_render_profile: RenderProfile = RenderProfile.FLAT,
+	p_body_atlas_coord: Vector2i = INVALID_ATLAS_COORD,
+	p_cap_atlas_coord: Vector2i = INVALID_ATLAS_COORD,
+	p_cap_offset_px: int = 0,
 ) -> void:
 	id = p_id
 	name = p_name
@@ -93,11 +126,41 @@ func _init(
 	plant = p_plant
 	drop_tile_id = p_drop_tile_id if p_drop_tile_id >= 0 else p_id
 	placement_variants = p_placement_variants.duplicate()
+	render_profile = p_render_profile
+	body_atlas_coord = p_body_atlas_coord if p_body_atlas_coord != INVALID_ATLAS_COORD else p_atlas_coord
+	cap_atlas_coord = p_cap_atlas_coord
+	cap_offset_px = maxi(p_cap_offset_px, 0)
 
 
 ## Returns properties for a tile ID, or null for empty / water tiles.
 static func get_properties(tile_id: int) -> TileProperties:
 	return registry.get(tile_id)
+
+
+func uses_tall_structure_visual() -> bool:
+	return (
+		render_profile == RenderProfile.TALL_STRUCTURE
+		and body_atlas_coord != INVALID_ATLAS_COORD
+		and cap_atlas_coord != INVALID_ATLAS_COORD
+	)
+
+
+func build_tall_structure_parts(tile_size_px: int) -> Array[Dictionary]:
+	if not uses_tall_structure_visual():
+		return []
+
+	return [
+		{
+			"atlas_coord": body_atlas_coord,
+			"offset": Vector2(-tile_size_px / 2.0, -tile_size_px),
+			"z_index": 0,
+		},
+		{
+			"atlas_coord": cap_atlas_coord,
+			"offset": Vector2(-tile_size_px / 2.0, -tile_size_px - cap_offset_px),
+			"z_index": 1,
+		},
+	]
 
 
 ## Returns the concrete tile ID that should be written when placing this tile.

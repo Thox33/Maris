@@ -183,10 +183,10 @@ func _setup_sprite() -> void:
 
 	# Use the tile atlas as the item sprite source.
 	var item_props := ItemProperties.get_properties(item_id)
-	if item_props == null or item_props.tile_id == -1:
+	if item_props == null:
 		return
 
-	var tile_props := TileProperties.get_properties(item_props.tile_id)
+	var tile_props := TileProperties.get_properties(item_props.get_icon_tile_id())
 	if tile_props == null:
 		return
 

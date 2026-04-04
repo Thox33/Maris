@@ -6,6 +6,7 @@ extends Node2D
 var _player: CharacterBody2D
 var _terrain_layer: TileMapLayer
 var _chunk_manager: Node
+var _structure_manager: Node
 var _inventory_manager: Node
 
 ## Currently selected hotbar slot (0-based, indexes into first HOTBAR_SIZE inventory slots).
@@ -27,6 +28,7 @@ func _ready() -> void:
 	if world:
 		_terrain_layer = world.get_node("TerrainLayer")
 		_chunk_manager = world.get_node("ChunkManager")
+		_structure_manager = world.get_node_or_null("StructureManager")
 	_inventory_manager = get_tree().get_root().get_node_or_null("Main/InventoryManager")
 	_setup_crack_sprite()
 
@@ -67,25 +69,41 @@ func _handle_breaking(delta: float) -> void:
 		return
 
 	var tile_id: int = _chunk_manager.get_tile_at(coord)
-	if tile_id == TileProperties.EMPTY:
-		_reset_breaking()
-		return
+	var break_total := 0.0
+	var breaking_structure := false
 
-	var props: TileProperties = TileProperties.get_properties(tile_id)
-	if props == null or not props.breakable:
-		_reset_breaking()
-		return
+	if tile_id == TileProperties.EMPTY:
+		if _structure_manager == null:
+			_reset_breaking()
+			return
+		var structure_data := _structure_manager.get_breakable_structure_data(coord) as Dictionary
+		if structure_data.is_empty():
+			_reset_breaking()
+			return
+		break_total = float(structure_data.get("hardness", 1.0))
+		breaking_structure = true
+	else:
+		var props: TileProperties = TileProperties.get_properties(tile_id)
+		if props == null or not props.breakable:
+			_reset_breaking()
+			return
+		break_total = props.hardness
 
 	if coord != _target_coord:
 		_target_coord = coord
 		_break_progress = 0.0
-		_break_total = props.hardness
+		_break_total = break_total
+	elif not is_equal_approx(_break_total, break_total):
+		_break_progress = 0.0
+		_break_total = break_total
 
 	_break_progress += delta
 	_update_crack_overlay(coord)
 
 	if _break_progress >= _break_total:
-		if _chunk_manager:
+		if breaking_structure and _structure_manager != null:
+			_structure_manager.break_structure_at(coord)
+		elif _chunk_manager:
 			_chunk_manager.break_tile(coord)
 		_reset_breaking()
 

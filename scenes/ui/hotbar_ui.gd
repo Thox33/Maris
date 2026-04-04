@@ -88,8 +88,9 @@ func _update_slot(index: int) -> void:
 		return
 
 	var item_props: ItemProperties = ItemProperties.get_properties(slot["item_id"])
-	if item_props and item_props.tile_id != -1:
-		var tile_props: TileProperties = TileProperties.get_properties(item_props.tile_id)
+	var icon_tile_id: int = item_props.get_icon_tile_id() if item_props else -1
+	if item_props and icon_tile_id != -1:
+		var tile_props: TileProperties = TileProperties.get_properties(icon_tile_id)
 		if tile_props:
 			var atlas_tex := AtlasTexture.new()
 			atlas_tex.atlas = _terrain_texture

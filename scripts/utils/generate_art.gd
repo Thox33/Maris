@@ -6,7 +6,7 @@ extends EditorScript
 
 const TW: int = 16
 ## Atlas layout: 8 columns, 2 rows.
-## Row 0: terrain (sand, stone, + future variants)
+## Row 0: terrain (sand, stone item/full, tall-structure body, tall-structure cap, + future variants)
 ## Row 1: coral variants (6 types)
 const COLS: int = 8
 const ROWS: int = 2
@@ -25,6 +25,8 @@ func _generate_terrain_tiles() -> void:
 	# --- Row 0: Terrain ---
 	_draw_sand(img, 0, 0)
 	_draw_stone(img, 1, 0)
+	_draw_stone_body(img, 2, 0)
+	_draw_stone_cap(img, 3, 0)
 
 	# --- Row 1: Coral variants ---
 	_draw_coral_branch(img, 0, 1)
@@ -81,6 +83,60 @@ func _draw_stone(img: Image, col: int, row: int) -> void:
 			if (x + y * 7) % 13 == 0:
 				c = dark
 			img.set_pixel(ox + x, oy + y, c)
+
+
+func _draw_stone_body(img: Image, col: int, row: int) -> void:
+	var tile := _build_stone_tile()
+	var ox: int = col * TW
+	var oy: int = row * TW
+	for y in range(1, TW):
+		for x in range(TW):
+			var c := tile[y][x] as Color
+			var shade := 0.12 + (float(y) / float(TW)) * 0.20
+			c = c.lerp(Color(0.15, 0.17, 0.22), shade)
+			if y == 1:
+				c = c.lerp(Color(0.82, 0.84, 0.88), 0.24)
+			img.set_pixel(ox + x, oy + y, c)
+
+
+func _draw_stone_cap(img: Image, col: int, row: int) -> void:
+	var tile := _build_stone_tile()
+	var ox: int = col * TW
+	var oy: int = row * TW
+	for y in range(6):
+		for x in range(TW):
+			var c := tile[y][x] as Color
+			c = c.lerp(Color(0.82, 0.84, 0.90), 0.22)
+			if y == 5:
+				c = c.lerp(Color(0.62, 0.65, 0.72), 0.18)
+			img.set_pixel(ox + x, oy + y, c)
+	for x in range(TW):
+		var shadow := Color(0.28, 0.30, 0.36)
+		img.set_pixel(ox + x, oy + 5, img.get_pixel(ox + x, oy + 5).lerp(shadow, 0.20))
+
+
+func _build_stone_tile() -> Array:
+	var pixels: Array = []
+	var base := Color(0.45, 0.45, 0.50)
+	var dark := Color(0.32, 0.32, 0.38)
+	var light := Color(0.55, 0.55, 0.60)
+	for y in range(TW):
+		var row: Array = []
+		for x in range(TW):
+			var c := base
+			if x == 3 and y > 2 and y < 12:
+				c = dark
+			if x == 4 and y > 5 and y < 14:
+				c = dark
+			if y == 8 and x > 6 and x < 14:
+				c = dark
+			if (x * 5 + y * 3) % 11 == 0:
+				c = light
+			if (x + y * 7) % 13 == 0:
+				c = dark
+			row.append(c)
+		pixels.append(row)
+	return pixels
 
 
 # --- Coral variants ---

@@ -26,6 +26,7 @@ static var selected_world_name: String = ""
 static var dedicated_server: bool = false
 
 @onready var world: Node2D = $World
+@onready var _players: Node = $World/DepthSorted/Players
 @onready var _player_spawner: MultiplayerSpawner = $PlayerSpawner
 @onready var _item_spawner: MultiplayerSpawner = $ItemSpawner
 @onready var inventory_manager: Node = $InventoryManager
@@ -54,6 +55,7 @@ func _ready() -> void:
 	NetworkManager.session_ended.connect(_on_session_ended)
 	GameEvents.game_leaving.connect(_on_game_leaving)
 	GameEvents.block_broken.connect(_on_block_broken)
+	GameEvents.structure_broken.connect(_on_structure_broken)
 	get_tree().auto_accept_quit = false
 	_character_setup_root.theme = MENU_STYLES.create_theme()
 	_character_setup_root.visible = false
@@ -65,6 +67,7 @@ func _ready() -> void:
 	# Give InventoryManager references it needs.
 	inventory_manager.item_spawner = _item_spawner
 	inventory_manager.chunk_manager = world.chunk_manager
+	inventory_manager.structure_manager = world.structure_manager
 
 	if multiplayer.is_server():
 		var world_name := selected_world_name if not selected_world_name.is_empty() else DEFAULT_WORLD_NAME
@@ -74,6 +77,7 @@ func _ready() -> void:
 		var seed_value: int = _load_or_create_seed()
 		print("[Main] Initializing world '%s' with seed %d" % [world_name, seed_value])
 		world.initialize(seed_value)
+		world.structure_manager.load_from_save()
 
 		if dedicated_server:
 			# Dedicated server: load spawn area but don't join as a player.
@@ -148,10 +152,11 @@ func _complete_join(peer_id: int, player_record: Dictionary) -> void:
 
 	# Ensure terrain exists before the player lands.
 	world.chunk_manager.load_chunks_around(pos)
+	world.structure_manager.sync_full_state_to_peer(peer_id)
 
 	# Spawn the player (MultiplayerSpawner replicates to all peers).
 	var player_id := str(peer_id)
-	if not $Players.has_node(player_id):
+	if not _players.has_node(player_id):
 		_player_spawner.spawn({
 			"peer_id": peer_id,
 			"x": pos.x,
@@ -183,7 +188,7 @@ func _on_player_disconnected(peer_id: int) -> void:
 	# Clean up inventory.
 	inventory_manager.remove_inventory(peer_id)
 	# queue_free on a spawner-tracked node automatically despawns on all peers.
-	var node := $Players.get_node_or_null(str(peer_id))
+	var node := _players.get_node_or_null(str(peer_id))
 	if node:
 		node.queue_free()
 
@@ -215,6 +220,15 @@ func _on_block_broken(coord: Vector2i, tile_id: int) -> void:
 		coord.y * GameConstants.TILE_SIZE + GameConstants.TILE_SIZE / 2.0,
 	)
 	spawn_item_drop(item_id, 1, tile_center)
+
+
+func _on_structure_broken(structure_id: String, world_pos: Vector2) -> void:
+	if not multiplayer.is_server():
+		return
+	var item_id := ItemProperties.from_structure(structure_id)
+	if item_id == ItemProperties.NONE:
+		return
+	spawn_item_drop(item_id, 1, world_pos)
 
 
 ## Server-only: spawns an item drop in the world at the given position.
@@ -403,7 +417,7 @@ func _save_player(peer_id: int) -> void:
 	var data: Dictionary = {}
 
 	# Position from the player node.
-	var player_node := $Players.get_node_or_null(str(peer_id))
+	var player_node := _players.get_node_or_null(str(peer_id))
 	if player_node:
 		data["progress"] = {
 			"x": player_node.global_position.x,
@@ -476,8 +490,9 @@ func _save_world() -> void:
 		return
 	SaveManager.save_world_meta(world.world_seed)
 	SaveManager.save_all_chunks(world.chunk_manager.loaded_chunks)
+	world.structure_manager.save_to_disk()
 	# Save all connected players.
-	for player in $Players.get_children():
+	for player in _players.get_children():
 		var peer_id: int = player.name.to_int()
 		if peer_id > 0:
 			_save_player(peer_id)

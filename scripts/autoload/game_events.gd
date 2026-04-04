@@ -27,6 +27,11 @@ signal block_broken(coord: Vector2i, tile_id: int)
 @warning_ignore("unused_signal")
 signal block_placed(coord: Vector2i, tile_id: int)
 
+## A placed structure was broken and removed from the world.
+## Fired by: StructureManager
+@warning_ignore("unused_signal")
+signal structure_broken(structure_id: String, world_pos: Vector2)
+
 # --- Player events (server-side) ---
 
 ## A player has fully joined: spawned, inventory created/restored.

@@ -138,6 +138,16 @@ func save_all_chunks(loaded_chunks: Dictionary) -> void:
 		print("[SaveManager] Saved %d modified chunk(s)" % saved_count)
 
 
+func save_structures(structures: Array[Dictionary]) -> void:
+	_write_json(_world_dir + "structures.json", {"structures": structures})
+
+
+func load_structures() -> Array:
+	var data := _read_json(_world_dir + "structures.json")
+	var structures: Variant = data.get("structures", [])
+	return structures if structures is Array else []
+
+
 # --- Player persistence ---
 
 
