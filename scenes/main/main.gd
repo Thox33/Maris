@@ -437,9 +437,9 @@ func _save_player(peer_id: int) -> void:
 		data["character"] = existing_character
 
 	# Inventory.
-	var inv: Inventory = inventory_manager.get_inventory(peer_id)
-	if inv:
-		data["progress"]["inventory"] = inv.serialize()
+	var serialized_inventory: Array = inventory_manager.get_persistent_inventory_snapshot(peer_id)
+	if not serialized_inventory.is_empty():
+		data["progress"]["inventory"] = serialized_inventory
 
 	SaveManager.save_player(account_id, data)
 	print("[Main] Saved player %s (peer %d)" % [account_id, peer_id])
