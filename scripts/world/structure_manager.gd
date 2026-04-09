@@ -188,7 +188,10 @@ func _request_break_structure(tx: int, ty: int) -> void:
 
 @rpc("authority", "reliable")
 func _sync_break_structure(structure_id: String, origin_x: int, origin_y: int) -> void:
-	_remove_structure_instance(structure_id, Vector2i(origin_x, origin_y))
+	var origin := Vector2i(origin_x, origin_y)
+	var world_pos := _get_structure_break_world_pos(structure_id, origin)
+	_remove_structure_instance(structure_id, origin)
+	GameEvents.structure_broken.emit(structure_id, world_pos)
 
 
 func _register_structure_instance(data: Dictionary, broadcast_to_clients: bool) -> void:

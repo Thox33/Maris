@@ -292,7 +292,10 @@ func _request_break_tile(tx: int, ty: int) -> void:
 ## Host tells all clients a tile was broken.
 @rpc("authority", "reliable")
 func _sync_break_tile(tx: int, ty: int) -> void:
-	_do_break_tile(Vector2i(tx, ty))
+	var coord := Vector2i(tx, ty)
+	var tile_id: int = get_tile_at(coord)
+	_do_break_tile(coord)
+	GameEvents.block_broken.emit(coord, tile_id)
 
 
 # --- Block placing ---
