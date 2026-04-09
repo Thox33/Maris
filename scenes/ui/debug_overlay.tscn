@@ -1,10 +1,18 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://scenes/ui/debug_overlay.gd" id="1"]
+[ext_resource type="Script" path="res://scenes/ui/player_direction_overlay.gd" id="2"]
 
 [node name="DebugOverlay" type="CanvasLayer"]
 script = ExtResource("1")
 layer = 120
+
+[node name="DirectionOverlay" type="Control" parent="."]
+visible = false
+offset_right = 1280.0
+offset_bottom = 720.0
+mouse_filter = 2
+script = ExtResource("2")
 
 [node name="MarginContainer" type="MarginContainer" parent="."]
 offset_right = 520.0

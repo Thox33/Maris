@@ -1,4 +1,5 @@
 extends Node
+const CHARACTER_APPEARANCE := preload("res://scripts/player/character_appearance.gd")
 ## Manages world persistence — chunk modifications, player data, and world metadata.
 ## Autoloaded as "SaveManager". All write operations are server-only.
 ##
@@ -258,7 +259,14 @@ func _normalize_account_record(account_id: String, raw: Dictionary) -> Dictionar
 func _normalize_character_record(raw: Dictionary) -> Dictionary:
 	var character: Variant = raw.get("character", {})
 	if character is Dictionary:
-		return character
+		var normalized: Dictionary = (character as Dictionary).duplicate(true)
+		var appearance: Variant = normalized.get("appearance", {})
+		normalized["appearance"] = (
+			CHARACTER_APPEARANCE.normalize_appearance(appearance)
+			if appearance is Dictionary
+			else CHARACTER_APPEARANCE.create_default_appearance()
+		)
+		return normalized
 	return {}
 
 

@@ -8,9 +8,11 @@ var _chunk_manager: Node
 var _enabled: bool = false
 
 
+func setup_chunk_manager(chunk_manager: Node) -> void:
+	_chunk_manager = chunk_manager
+
+
 func _ready() -> void:
-	var world := get_tree().get_root().get_node_or_null("Main/World")
-	_chunk_manager = world.get_node_or_null("ChunkManager") if world != null else null
 	visible = false
 	set_process(false)
 

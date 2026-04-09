@@ -43,6 +43,10 @@ func _ready() -> void:
 	replicated_position = position
 
 
+func setup_inventory_manager(inventory_manager: Node) -> void:
+	_inventory_manager = inventory_manager
+
+
 ## Called by the spawner's spawn_function to set item data and visuals.
 func initialize(p_item_id: int, p_count: int) -> void:
 	item_id = p_item_id
@@ -145,10 +149,6 @@ func _try_pickup(body: Node2D) -> void:
 		return
 
 	if _inventory_manager == null:
-		_inventory_manager = get_tree().get_root().get_node_or_null(
-			"Main/InventoryManager"
-		)
-	if _inventory_manager == null:
 		return
 
 	var remainder: int = _inventory_manager.server_add_item(peer_id, item_id, count)
@@ -186,20 +186,10 @@ func _setup_sprite() -> void:
 	if item_props == null:
 		return
 
-	var tile_props := TileProperties.get_properties(item_props.get_icon_tile_id())
-	if tile_props == null:
+	var atlas_texture := item_props.build_icon_texture()
+	if atlas_texture == null:
 		return
 
-	# Load the terrain atlas image and extract this tile's region.
-	var atlas_texture := AtlasTexture.new()
-	atlas_texture.atlas = load("res://assets/tilesets/terrain_tiles.png")
-	var ts: int = GameConstants.TILE_SIZE
-	atlas_texture.region = Rect2(
-		tile_props.atlas_coord.x * ts,
-		tile_props.atlas_coord.y * ts,
-		ts,
-		ts,
-	)
 	sprite.texture = atlas_texture
 	# Scale down slightly so the drop looks smaller than a placed tile.
 	sprite.scale = Vector2(0.65, 0.65)

@@ -1,5 +1,10 @@
 # Inventory Plan
 
+See also:
+
+- [`../index.md`](../index.md)
+- [`../architecture/overview.md`](../architecture/overview.md)
+
 Stand: 2026-04-03
 
 ## Ziel

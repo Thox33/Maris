@@ -1,6 +1,21 @@
 # Roadmap & Feature Backlog
 
+See also:
+
+- [`../index.md`](../index.md)
+- [`../architecture/overview.md`](../architecture/overview.md)
+
 ## Architectural Groundwork (do early, expensive to retrofit)
+
+### Session Architecture Refactor
+
+See [`session_architecture_refactor_plan.md`](session_architecture_refactor_plan.md).
+
+- [ ] Split `main.gd` into smaller session services
+- [ ] Reduce direct scene-path coupling between runtime systems
+- [ ] Narrow `InventoryManager` to inventory-specific concerns
+- [x] Decide and document the authority model baseline
+- [x] Move block and structure breaking to host-authoritative item-use damage + cooldown
 
 ### Autotiling / Terrain Blending
 Tiles should visually blend with same-type neighbors (coral colony, seamless sand/stone).

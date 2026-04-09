@@ -116,4 +116,4 @@ func _register_with_manager() -> void:
 
 
 func _get_manager() -> Node:
-	return get_tree().root.get_node_or_null("Main/OverheadLayer")
+	return get_tree().get_first_node_in_group("overhead_managers")

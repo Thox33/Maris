@@ -31,7 +31,7 @@ const SWIM_FRICTION: float = 200.0
 const DEFAULT_PORT: int = 7777
 const MAX_PLAYERS: int = 4
 ## How often (seconds) the authority sends position updates to peers.
-const POSITION_SYNC_INTERVAL: float = 0.033
+const POSITION_SYNC_INTERVAL: float = 0.01
 ## Render remote players slightly in the past so interpolation has two snapshots.
 const REMOTE_PLAYER_INTERPOLATION_BACK_TIME: float = 0.1
 ## Small fallback extrapolation when only one recent player snapshot is available.
@@ -44,6 +44,18 @@ const ITEM_POSITION_SMOOTHING: float = 16.0
 # --- Block interaction ---
 ## Maximum distance (in pixels) at which a player can break/place blocks.
 const BLOCK_INTERACT_RANGE: float = 80.0
+## Base damage applied by one mining hit before tool modifiers.
+const BREAK_BASE_DAMAGE: float = 0.25
+## Base cooldown between mining hits before tool modifiers.
+const PRIMARY_USE_COOLDOWN: float = 0.25
+## How often a held primary-use target is refreshed to the host.
+const PRIMARY_USE_KEEPALIVE_INTERVAL: float = 0.2
+## How long the host keeps an active primary-use state without a fresh keepalive.
+const PRIMARY_USE_TIMEOUT: float = 0.7
+## How long a damaged target remains resumable without further hits.
+const DAMAGED_TARGET_TIMEOUT: float = 5.0
+## Number of crack stages used for replicated damage visuals.
+const BREAK_STAGE_COUNT: int = 8
 
 # --- Inventory ---
 ## Total number of slots in a player inventory.

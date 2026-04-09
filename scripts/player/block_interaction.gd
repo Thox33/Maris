@@ -10,29 +10,31 @@ var _terrain_layer: TileMapLayer
 var _chunk_manager: Node
 var _structure_manager: Node
 var _inventory_manager: Node
+var _use_authority_service: Node
 
 ## Currently selected hotbar slot (0-based, indexes into first HOTBAR_SIZE inventory slots).
 var selected_hotbar_slot: int = 0
 
-## Currently targeted tile coordinate (in tile-space), or null if not mining.
-var _target_coord: Vector2i = Vector2i(-99999, -99999)
-var _break_progress: float = 0.0
-var _break_total: float = 1.0
+var _active_break_coord: Vector2i = Vector2i(-99999, -99999)
+var _break_keepalive_timer: float = 0.0
 
-## Crack overlay sprite, created at runtime and positioned over the target tile.
-var _crack_sprite: Sprite2D
-var _crack_texture: Texture2D
+
+func setup_session(
+	terrain_layer: TileMapLayer,
+	chunk_manager: Node,
+	structure_manager: Node,
+	inventory_manager: Node,
+	use_authority_service: Node,
+) -> void:
+	_terrain_layer = terrain_layer
+	_chunk_manager = chunk_manager
+	_structure_manager = structure_manager
+	_inventory_manager = inventory_manager
+	_use_authority_service = use_authority_service
 
 
 func _ready() -> void:
 	_player = get_parent() as CharacterBody2D
-	var world := get_tree().get_root().get_node_or_null("Main/World")
-	if world:
-		_terrain_layer = world.get_node("TerrainLayer")
-		_chunk_manager = world.get_node("ChunkManager")
-		_structure_manager = world.get_node_or_null("StructureManager")
-	_inventory_manager = get_tree().get_root().get_node_or_null("Main/InventoryManager")
-	_setup_crack_sprite()
 
 
 func _process(delta: float) -> void:
@@ -42,17 +44,17 @@ func _process(delta: float) -> void:
 		return
 
 	if ChatManager.is_chat_open:
-		_reset_breaking()
+		_stop_breaking()
 		return
 
 	if _is_mouse_over_world_blocking_ui():
-		_reset_breaking()
+		_stop_breaking()
 		return
 
 	if Input.is_action_pressed("break_block"):
 		_handle_breaking(delta)
 	else:
-		_reset_breaking()
+		_stop_breaking()
 
 	if _has_held_cursor_item():
 		if Input.is_action_just_pressed("place_block"):
@@ -62,59 +64,30 @@ func _process(delta: float) -> void:
 
 
 func _handle_breaking(delta: float) -> void:
-	if _terrain_layer == null:
+	if _terrain_layer == null or _use_authority_service == null:
 		return
 
 	var mouse_world := get_global_mouse_position()
 	var player_pos: Vector2 = _player.global_position
 
 	if player_pos.distance_to(mouse_world) > GameConstants.BLOCK_INTERACT_RANGE:
-		_reset_breaking()
+		_stop_breaking()
 		return
 
 	var coord := _terrain_layer.local_to_map(mouse_world)
-	if _chunk_manager == null:
-		_reset_breaking()
+	if not _has_breakable_target(coord):
+		_stop_breaking()
 		return
 
-	var tile_id: int = _chunk_manager.get_tile_at(coord)
-	var break_total := 0.0
-	var breaking_structure := false
+	_break_keepalive_timer -= delta
+	var target_changed := coord != _active_break_coord
+	if target_changed:
+		_active_break_coord = coord
+		_break_keepalive_timer = 0.0
 
-	if tile_id == TileProperties.EMPTY:
-		if _structure_manager == null:
-			_reset_breaking()
-			return
-		var structure_data := _structure_manager.get_breakable_structure_data(coord) as Dictionary
-		if structure_data.is_empty():
-			_reset_breaking()
-			return
-		break_total = float(structure_data.get("hardness", 1.0))
-		breaking_structure = true
-	else:
-		var props: TileProperties = TileProperties.get_properties(tile_id)
-		if props == null or not props.breakable:
-			_reset_breaking()
-			return
-		break_total = props.hardness
-
-	if coord != _target_coord:
-		_target_coord = coord
-		_break_progress = 0.0
-		_break_total = break_total
-	elif not is_equal_approx(_break_total, break_total):
-		_break_progress = 0.0
-		_break_total = break_total
-
-	_break_progress += delta
-	_update_crack_overlay(coord)
-
-	if _break_progress >= _break_total:
-		if breaking_structure and _structure_manager != null:
-			_structure_manager.break_structure_at(coord)
-		elif _chunk_manager:
-			_chunk_manager.break_tile(coord)
-		_reset_breaking()
+	if target_changed or _break_keepalive_timer <= 0.0:
+		_use_authority_service.request_primary_use(coord, selected_hotbar_slot)
+		_break_keepalive_timer = GameConstants.PRIMARY_USE_KEEPALIVE_INTERVAL
 
 
 ## Sends a place-block intent to the server for the currently selected hotbar slot.
@@ -184,94 +157,26 @@ func _is_mouse_over_world_blocking_ui() -> bool:
 	return false
 
 
-func _update_crack_overlay(coord: Vector2i) -> void:
-	_crack_sprite.visible = true
-	var tile_world := Vector2(coord) * GameConstants.TILE_SIZE
-	tile_world += Vector2(GameConstants.TILE_SIZE / 2.0, GameConstants.TILE_SIZE / 2.0)
-	_crack_sprite.global_position = tile_world
+func _has_breakable_target(coord: Vector2i) -> bool:
+	if _chunk_manager != null:
+		var tile_id: int = _chunk_manager.get_tile_at(coord)
+		if tile_id != TileProperties.EMPTY:
+			var props: TileProperties = TileProperties.get_properties(tile_id)
+			if props != null and props.breakable:
+				return true
 
-	var ratio: float = clampf(_break_progress / _break_total, 0.0, 1.0)
-	_crack_sprite.frame = mini(
-		int(ratio * float(_crack_sprite.hframes)),
-		_crack_sprite.hframes - 1
-	)
+	if _structure_manager != null:
+		var structure_data := _structure_manager.get_breakable_structure_data(coord) as Dictionary
+		if not structure_data.is_empty():
+			return true
 
-
-## Creates a crack overlay sprite with a procedural 8-frame spritesheet.
-func _setup_crack_sprite() -> void:
-	var frame_count: int = 8
-	var size: int = GameConstants.TILE_SIZE
-	var img := Image.create(size * frame_count, size, false, Image.FORMAT_RGBA8)
-	img.fill(Color(0, 0, 0, 0))
-
-	var crack_color := Color(0.05, 0.08, 0.12, 0.72)
-	var center := Vector2(float(size - 1) / 2.0, float(size - 1) / 2.0)
-	for frame in range(frame_count):
-		var offset_x: int = frame * size
-		var progress := float(frame + 1) / float(frame_count)
-		var primary_branches: int = 4 + frame
-		for branch in range(primary_branches):
-			var angle := (TAU * float(branch) / float(primary_branches)) + randf_range(-0.22, 0.22)
-			var branch_length := lerpf(2.5, float(size) * 0.48, progress) + randf_range(-1.0, 1.0)
-			_draw_crack_branch(img, offset_x, center, angle, branch_length, crack_color, progress)
-
-			if frame >= 2:
-				var split_count: int = 1 + int(progress * 2.0)
-				for _split in range(split_count):
-					var split_distance := branch_length * randf_range(0.35, 0.8)
-					var split_origin := center + Vector2.from_angle(angle) * split_distance
-					var split_angle := angle + randf_range(-0.9, 0.9)
-					var split_length := branch_length * randf_range(0.2, 0.45)
-					_draw_crack_branch(
-						img,
-						offset_x,
-						split_origin,
-						split_angle,
-						split_length,
-						crack_color,
-						progress * 0.85
-					)
-
-	_crack_texture = ImageTexture.create_from_image(img)
-	_crack_sprite = Sprite2D.new()
-	_crack_sprite.texture = _crack_texture
-	_crack_sprite.hframes = frame_count
-	_crack_sprite.visible = false
-	_crack_sprite.z_index = 10
-	get_tree().get_root().call_deferred("add_child", _crack_sprite)
+	return false
 
 
-func _draw_crack_branch(
-	img: Image,
-	offset_x: int,
-	start: Vector2,
-	angle: float,
-	length: float,
-	color: Color,
-	progress: float,
-) -> void:
-	var direction := Vector2.from_angle(angle)
-	var position_on_branch := start
-	var steps := maxi(int(length * 1.6), 1)
-
-	for step in range(steps):
-		var t := float(step) / float(steps)
-		var wiggle := sin(t * PI * 2.0) * lerpf(0.1, 0.65, progress)
-		position_on_branch += direction * (length / float(steps))
-		position_on_branch += direction.orthogonal() * wiggle * 0.12
-
-		var px := clampi(int(round(position_on_branch.x)), 0, GameConstants.TILE_SIZE - 1)
-		var py := clampi(int(round(position_on_branch.y)), 0, GameConstants.TILE_SIZE - 1)
-		img.set_pixel(offset_x + px, py, color)
-
-		if progress > 0.45 and px + 1 < GameConstants.TILE_SIZE:
-			img.set_pixel(offset_x + px + 1, py, color)
-		if progress > 0.7 and py + 1 < GameConstants.TILE_SIZE:
-			img.set_pixel(offset_x + px, py + 1, color)
-
-
-func _reset_breaking() -> void:
-	_target_coord = Vector2i(-99999, -99999)
-	_break_progress = 0.0
-	if _crack_sprite:
-		_crack_sprite.visible = false
+func _stop_breaking() -> void:
+	if _active_break_coord == Vector2i(-99999, -99999):
+		return
+	_active_break_coord = Vector2i(-99999, -99999)
+	_break_keepalive_timer = 0.0
+	if _use_authority_service != null:
+		_use_authority_service.stop_primary_use()

@@ -67,6 +67,19 @@ func get_breakable_structure_data(coord: Vector2i) -> Dictionary:
 	}
 
 
+func has_structure_instance(structure_id: String, origin: Vector2i) -> bool:
+	return _structures_by_key.has(_structure_key(structure_id, origin))
+
+
+func get_breakable_cells_for_instance(structure_id: String, origin: Vector2i) -> Array[Vector2i]:
+	if not has_structure_instance(structure_id, origin):
+		return []
+	var definition := StructureCatalog.get_definition(structure_id)
+	if definition == null:
+		return []
+	return definition.get_breakable_world_cells(origin)
+
+
 func can_place_structure_at(target_cell: Vector2i, structure_id: String) -> bool:
 	var definition := StructureCatalog.get_definition(structure_id)
 	if definition == null or chunk_manager == null:
@@ -122,6 +135,19 @@ func break_structure_at(coord: Vector2i) -> bool:
 		return true
 
 	_request_break_structure.rpc_id(1, coord.x, coord.y)
+	return true
+
+
+func break_structure_instance(structure_id: String, origin: Vector2i) -> bool:
+	if not multiplayer.is_server():
+		return false
+	if not has_structure_instance(structure_id, origin):
+		return false
+
+	var world_pos := _get_structure_break_world_pos(structure_id, origin)
+	_remove_structure_instance(structure_id, origin)
+	_sync_break_structure.rpc(structure_id, origin.x, origin.y)
+	GameEvents.structure_broken.emit(structure_id, world_pos)
 	return true
 
 
@@ -270,3 +296,26 @@ func _remove_structure_instance(structure_id: String, origin: Vector2i) -> void:
 	if visual != null:
 		_structure_visuals.erase(key)
 		visual.queue_free()
+
+
+func _get_structure_break_world_pos(structure_id: String, origin: Vector2i) -> Vector2:
+	var definition := StructureCatalog.get_definition(structure_id)
+	if definition == null:
+		return Vector2(
+			origin.x * GameConstants.TILE_SIZE + GameConstants.TILE_SIZE / 2.0,
+			origin.y * GameConstants.TILE_SIZE + GameConstants.TILE_SIZE / 2.0
+		)
+	var breakable_cells := definition.get_breakable_world_cells(origin)
+	if breakable_cells.is_empty():
+		return Vector2(
+			origin.x * GameConstants.TILE_SIZE + GameConstants.TILE_SIZE / 2.0,
+			origin.y * GameConstants.TILE_SIZE + GameConstants.TILE_SIZE / 2.0
+		)
+
+	var sum := Vector2.ZERO
+	for cell in breakable_cells:
+		sum += Vector2(
+			cell.x * GameConstants.TILE_SIZE + GameConstants.TILE_SIZE / 2.0,
+			cell.y * GameConstants.TILE_SIZE + GameConstants.TILE_SIZE / 2.0
+		)
+	return sum / float(breakable_cells.size())

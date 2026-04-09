@@ -6,11 +6,18 @@ extends RefCounted
 
 ## Sentinel for empty slots / no item.
 const NONE: int = -1
+const DEFAULT_ICON_ATLAS_PATH := "res://assets/tilesets/terrain_tiles.png"
+const INVALID_ICON_COORD := Vector2i(-1, -1)
 
 enum PlacementKind {
 	NONE,
 	TILE,
 	STRUCTURE,
+}
+
+enum ToolKind {
+	NONE,
+	PICKAXE,
 }
 
 ## Master registry: stable integer ID -> ItemProperties.
@@ -28,6 +35,20 @@ static var registry: Dictionary = {
 		"large_furnace",
 		1
 	),
+	4: ItemProperties.new(
+		4,
+		"stone_pickaxe",
+		1,
+		PlacementKind.NONE,
+		-1,
+		"",
+		1,
+		0.75,
+		0.18,
+		ToolKind.PICKAXE,
+		"res://assets/tilesets/tool_items.png",
+		Vector2i(0, 0)
+	),
 }
 
 ## Reverse lookup: string name -> integer ID. Keep in sync with registry.
@@ -36,6 +57,7 @@ static var by_name: Dictionary = {
 	"stone": 1,
 	"coral": 2,
 	"large_furnace": 3,
+	"stone_pickaxe": 4,
 }
 
 ## Stable integer ID (never reuse a removed ID).
@@ -52,6 +74,16 @@ var tile_id: int
 var structure_id: String
 ## Tile used to render this item in the UI/world.
 var icon_tile_id: int
+## Optional atlas path for a custom icon sheet.
+var icon_atlas_path: String
+## Optional atlas coordinate inside a custom icon sheet.
+var icon_atlas_coord: Vector2i
+## Base break damage when this item is used against a breakable target.
+var break_damage: float
+## Cooldown in seconds before this item may perform the next primary use.
+var use_cooldown: float
+## Optional tool classification for gameplay rules and balancing.
+var tool_kind: ToolKind
 
 
 func _init(
@@ -62,6 +94,11 @@ func _init(
 	p_tile_id: int = -1,
 	p_structure_id: String = "",
 	p_icon_tile_id: int = -1,
+	p_break_damage: float = GameConstants.BREAK_BASE_DAMAGE,
+	p_use_cooldown: float = GameConstants.PRIMARY_USE_COOLDOWN,
+	p_tool_kind: ToolKind = ToolKind.NONE,
+	p_icon_atlas_path: String = "",
+	p_icon_atlas_coord: Vector2i = INVALID_ICON_COORD,
 ) -> void:
 	id = p_id
 	name = p_name
@@ -70,6 +107,11 @@ func _init(
 	tile_id = p_tile_id
 	structure_id = p_structure_id
 	icon_tile_id = p_icon_tile_id if p_icon_tile_id >= 0 else p_tile_id
+	icon_atlas_path = p_icon_atlas_path
+	icon_atlas_coord = p_icon_atlas_coord
+	break_damage = maxf(p_break_damage, 0.0)
+	use_cooldown = maxf(p_use_cooldown, 0.0)
+	tool_kind = p_tool_kind
 
 
 ## Returns properties for an item ID, or null if not found.
@@ -107,3 +149,54 @@ func places_structure() -> bool:
 
 func get_icon_tile_id() -> int:
 	return icon_tile_id
+
+
+func get_icon_atlas_path() -> String:
+	if not icon_atlas_path.is_empty():
+		return icon_atlas_path
+	return DEFAULT_ICON_ATLAS_PATH
+
+
+func get_icon_atlas_coord() -> Vector2i:
+	if icon_atlas_coord != INVALID_ICON_COORD:
+		return icon_atlas_coord
+	var tile_props := TileProperties.get_properties(icon_tile_id)
+	if tile_props == null:
+		return INVALID_ICON_COORD
+	return tile_props.atlas_coord
+
+
+func build_icon_texture() -> Texture2D:
+	var atlas_coord := get_icon_atlas_coord()
+	if atlas_coord == INVALID_ICON_COORD:
+		return null
+	var atlas := load(get_icon_atlas_path()) as Texture2D
+	if atlas == null:
+		return null
+
+	var atlas_texture := AtlasTexture.new()
+	atlas_texture.atlas = atlas
+	var tile_size := GameConstants.TILE_SIZE
+	atlas_texture.region = Rect2(
+		atlas_coord.x * tile_size,
+		atlas_coord.y * tile_size,
+		tile_size,
+		tile_size
+	)
+	return atlas_texture
+
+
+func get_break_damage() -> float:
+	return break_damage
+
+
+func get_use_cooldown() -> float:
+	return use_cooldown
+
+
+func get_tool_kind() -> ToolKind:
+	return tool_kind
+
+
+func is_tool() -> bool:
+	return tool_kind != ToolKind.NONE

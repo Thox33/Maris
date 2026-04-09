@@ -22,7 +22,7 @@
 
 ```text
 assets/   Sprites, shaders, tilesets
-docs/     Architecture notes and roadmap
+docs/     Project documentation index, architecture, systems, plans, decisions
 scenes/   Godot scenes for main flow, UI, player, world, items
 scripts/  Autoloads, gameplay logic, inventory, world systems, utilities
 ```
@@ -35,9 +35,13 @@ scripts/  Autoloads, gameplay logic, inventory, world systems, utilities
 
 ## Documentation
 
-- `docs/architecture.md`: multiplayer model, scene flow, chunk system, tile system
-- `docs/roadmap.md`: backlog and next technical/gameplay milestones
-- `GAME_PROJECT_BRIEF.md`: project scope and guiding principles
+- Start with [`docs/index.md`](docs/index.md).
+- Architecture docs live in [`docs/architecture/`](docs/architecture/).
+- System-specific docs live in [`docs/systems/`](docs/systems/).
+- Implementation plans and backlog live in [`docs/plans/`](docs/plans/).
+- Architecture decisions live in [`docs/decisions/`](docs/decisions/).
+
+The root `README` stays intentionally short. Detailed technical documentation belongs in `docs/`.
 
 ## Git Workflow
 
@@ -56,9 +60,3 @@ Recommended flow:
 1. Branch from `develop`.
 2. Merge finished feature branches back into `develop`.
 3. Merge `develop` into `main` when a stable milestone is ready.
-
-## Near-Term Priorities
-
-- Character editing from lobby/in-game menu
-- Biomes and more tile variety
-- Sound and music

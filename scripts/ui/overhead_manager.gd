@@ -8,6 +8,7 @@ var _entries: Dictionary = {}
 
 
 func _ready() -> void:
+	add_to_group("overhead_managers")
 	for source: OverheadSource in get_tree().get_nodes_in_group("overhead_sources"):
 		register_source(source)
 

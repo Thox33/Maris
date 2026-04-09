@@ -14,7 +14,6 @@ const DRAG_THRESHOLD := 6.0
 
 var _block_interaction: Node2D
 var _inventory_manager: Node
-var _terrain_texture: Texture2D
 
 var _slot_panels: Array = []
 var _slot_icons: Array = []
@@ -52,15 +51,19 @@ var _last_pickup_item_id: int = ItemProperties.NONE
 @onready var _hotbar_row: GridContainer = $Root/BottomDock/Stack/HotbarPanel/HotbarPadding/HotbarRow
 
 
+func setup_session(block_interaction: Node2D, inventory_manager: Node) -> void:
+	_block_interaction = block_interaction
+	_inventory_manager = inventory_manager
+
+
 func _ready() -> void:
 	if not get_parent().is_multiplayer_authority():
 		visible = false
 		set_process_unhandled_input(false)
 		return
 
-	_block_interaction = get_parent().get_node("BlockInteraction")
-	_inventory_manager = get_tree().root.get_node("Main/InventoryManager")
-	_terrain_texture = load("res://assets/tilesets/terrain_tiles.png")
+	if _block_interaction == null:
+		_block_interaction = get_parent().get_node_or_null("BlockInteraction")
 	_hotbar_actions = _build_hotbar_actions()
 
 	_create_styles()
@@ -70,8 +73,14 @@ func _ready() -> void:
 	_build_held_preview()
 	_register_world_input_blockers()
 
+	if _block_interaction == null:
+		return
+
 	_selected_index = _block_interaction.selected_hotbar_slot
 	_refresh_selection()
+
+	if _inventory_manager == null:
+		return
 
 	_inventory_manager.local_slot_changed.connect(_on_slot_changed)
 	_inventory_manager.local_inventory_synced.connect(_refresh_all_slots)
@@ -650,21 +659,6 @@ func _is_inventory_toggle_key(event: InputEventKey) -> bool:
 
 func _build_slot_icon_texture(item_id: int) -> Texture2D:
 	var item_props: ItemProperties = ItemProperties.get_properties(item_id)
-	var icon_tile_id: int = item_props.get_icon_tile_id() if item_props else -1
-	if item_props == null or icon_tile_id == -1:
+	if item_props == null:
 		return null
-
-	var tile_props: TileProperties = TileProperties.get_properties(icon_tile_id)
-	if tile_props == null:
-		return null
-
-	var atlas_tex := AtlasTexture.new()
-	atlas_tex.atlas = _terrain_texture
-	var ts: int = GameConstants.TILE_SIZE
-	atlas_tex.region = Rect2(
-		tile_props.atlas_coord.x * ts,
-		tile_props.atlas_coord.y * ts,
-		ts,
-		ts,
-	)
-	return atlas_tex
+	return item_props.build_icon_texture()

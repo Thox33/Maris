@@ -5,6 +5,9 @@ extends Node
 
 var is_chat_open: bool = false
 var commands: CommandRegistry
+var _session_world: Node
+var _session_players: Node
+var _session_inventory_manager: Node
 
 signal message_received(msg: Dictionary)
 
@@ -51,8 +54,21 @@ func close_chat() -> void:
 	is_chat_open = false
 
 
+func set_session_context(world: Node, players_node: Node, inventory_manager: Node) -> void:
+	_session_world = world
+	_session_players = players_node
+	_session_inventory_manager = inventory_manager
+
+
+func clear_session_context() -> void:
+	_session_world = null
+	_session_players = null
+	_session_inventory_manager = null
+
+
 func _on_session_ended(_reason: String) -> void:
 	close_chat()
+	clear_session_context()
 
 
 ## Client -> Server: deliver raw text for server-side processing.
@@ -139,7 +155,7 @@ func _cmd_tp(sender_id: int, args: Array[String]) -> Array[String]:
 	if not args[0].is_valid_int() or not args[1].is_valid_int():
 		return ["Teleport coordinates must be integers."]
 
-	var players := get_tree().get_root().get_node_or_null("Main/World/DepthSorted/Players")
+	var players := _session_players
 	if players == null:
 		return ["Teleport failed: players container not found."]
 
@@ -154,7 +170,7 @@ func _cmd_tp(sender_id: int, args: Array[String]) -> Array[String]:
 		tile_y * GameConstants.TILE_SIZE + GameConstants.TILE_SIZE / 2.0,
 	)
 
-	var world := get_tree().get_root().get_node_or_null("Main/World")
+	var world := _session_world
 	if world != null:
 		var chunk_manager := world.get_node_or_null("ChunkManager")
 		if chunk_manager != null:
@@ -201,7 +217,7 @@ func _cmd_give(sender_id: int, args: Array[String]) -> Array[String]:
 	if item_id == ItemProperties.NONE:
 		return ["Unknown item: %s" % item_name]
 
-	var inventory_manager := get_tree().get_root().get_node_or_null("Main/InventoryManager")
+	var inventory_manager := _session_inventory_manager
 	if inventory_manager == null:
 		return ["Give failed: inventory manager not found."]
 

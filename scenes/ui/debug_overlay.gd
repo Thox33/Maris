@@ -3,7 +3,18 @@ extends CanvasLayer
 
 var _player: CharacterBody2D
 var _label: Label
+var _direction_overlay: Control
 var _chunk_debug_overlay: Node
+var _world: Node
+var _items_node: Node
+var _players_node: Node
+
+
+func setup_session(world: Node, items_node: Node, players_node: Node, chunk_debug_overlay: Node) -> void:
+	_world = world
+	_items_node = items_node
+	_players_node = players_node
+	_chunk_debug_overlay = chunk_debug_overlay
 
 
 func _ready() -> void:
@@ -15,7 +26,7 @@ func _ready() -> void:
 		return
 
 	_label = $MarginContainer/PanelContainer/Label
-	_chunk_debug_overlay = get_tree().get_root().get_node_or_null("Main/World/ChunkDebugCanvas/ChunkDebugOverlay")
+	_direction_overlay = $DirectionOverlay
 	visible = false
 	_set_debug_visible(false)
 	_update_text()
@@ -47,6 +58,8 @@ func _set_debug_visible(value: bool) -> void:
 	visible = value
 	if _chunk_debug_overlay != null:
 		_chunk_debug_overlay.set_enabled(value)
+	if _direction_overlay != null:
+		_direction_overlay.visible = value
 
 
 func _update_text() -> void:
@@ -59,10 +72,7 @@ func _update_text() -> void:
 		role = "Host"
 
 	var fps := Engine.get_frames_per_second()
-	var world := get_tree().get_root().get_node_or_null("Main/World")
-	var chunk_manager := world.get_node_or_null("ChunkManager") if world != null else null
-	var items_node := get_tree().get_root().get_node_or_null("Main/Items")
-	var players_node := get_tree().get_root().get_node_or_null("Main/World/DepthSorted/Players")
+	var chunk_manager := _world.get_node_or_null("ChunkManager") if _world != null else null
 	var tile_coord := Vector2i(
 		floori(_player.global_position.x / GameConstants.TILE_SIZE),
 		floori(_player.global_position.y / GameConstants.TILE_SIZE)
@@ -81,12 +91,22 @@ func _update_text() -> void:
 		loaded_chunks = chunk_manager.loaded_chunks.size()
 
 	var player_count := 0
-	if players_node != null:
-		player_count = players_node.get_child_count()
+	if _players_node != null:
+		player_count = _players_node.get_child_count()
 
 	var item_count := 0
-	if items_node != null:
-		item_count = items_node.get_child_count()
+	if _items_node != null:
+		item_count = _items_node.get_child_count()
+
+	var facing := "unknown"
+	if _player.has_method("get_actor_facing"):
+		facing = String(_player.get_actor_facing())
+		if facing == "side" and _player.has_method("is_actor_side_view_mirrored"):
+			facing = "left" if bool(_player.is_actor_side_view_mirrored()) else "right"
+
+	var locomotion := "unknown"
+	if _player.has_method("get_actor_locomotion_state"):
+		locomotion = String(_player.get_actor_locomotion_state())
 
 	_label.text = "\n".join([
 		"Sandbox Debug",
@@ -95,6 +115,8 @@ func _update_text() -> void:
 		"Ping: %s" % ping_text,
 		"Pos: (%.1f, %.1f)" % [_player.global_position.x, _player.global_position.y],
 		"Vel: (%.1f, %.1f)" % [_player.velocity.x, _player.velocity.y],
+		"Facing: %s" % facing,
+		"Locomotion: %s" % locomotion,
 		"Tile: %s" % tile_coord,
 		"Chunk: %s" % chunk_coord,
 		"Loaded chunks: %d" % loaded_chunks,
@@ -102,3 +124,6 @@ func _update_text() -> void:
 		"Items: %d" % item_count,
 		"Pos sync: %.0f Hz" % (1.0 / GameConstants.POSITION_SYNC_INTERVAL),
 	])
+
+	if _direction_overlay != null and _direction_overlay.has_method("setup_players_node"):
+		_direction_overlay.setup_players_node(_players_node)

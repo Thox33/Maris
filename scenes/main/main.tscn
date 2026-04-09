@@ -7,6 +7,17 @@
 [ext_resource type="Script" uid="uid://bf1au0mv37n5t" path="res://scripts/main/screen_effects.gd" id="5"]
 [ext_resource type="Shader" uid="uid://3cyqkvao8lmj" path="res://assets/shaders/underwater.gdshader" id="6"]
 [ext_resource type="Script" path="res://scripts/ui/overhead_manager.gd" id="7"]
+[ext_resource type="Script" path="res://scripts/main/session_bootstrap_service.gd" id="8"]
+[ext_resource type="Script" path="res://scripts/main/session_join_service.gd" id="9"]
+[ext_resource type="Script" path="res://scripts/main/session_identity_service.gd" id="10"]
+[ext_resource type="Script" path="res://scripts/main/character_setup_service.gd" id="11"]
+[ext_resource type="Script" path="res://scripts/main/player_spawn_service.gd" id="12"]
+[ext_resource type="Script" path="res://scripts/main/session_persistence_service.gd" id="13"]
+[ext_resource type="Script" path="res://scripts/main/world_drop_service.gd" id="14"]
+[ext_resource type="Script" path="res://scripts/main/inventory_authority_service.gd" id="15"]
+[ext_resource type="Script" path="res://scripts/main/world_placement_service.gd" id="16"]
+[ext_resource type="Script" path="res://scripts/main/use_authority_service.gd" id="17"]
+[ext_resource type="Script" path="res://scripts/main/break_visual_service.gd" id="18"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_underwater"]
 shader = ExtResource("6")
@@ -30,6 +41,39 @@ spawn_path = NodePath("../Items")
 
 [node name="InventoryManager" type="Node" parent="." unique_id=425927451]
 script = ExtResource("3")
+
+[node name="InventoryAuthorityService" type="Node" parent="InventoryManager"]
+script = ExtResource("15")
+
+[node name="WorldPlacementService" type="Node" parent="InventoryManager"]
+script = ExtResource("16")
+
+[node name="SessionBootstrapService" type="Node" parent="."]
+script = ExtResource("8")
+
+[node name="SessionJoinService" type="Node" parent="."]
+script = ExtResource("9")
+
+[node name="SessionIdentityService" type="Node" parent="."]
+script = ExtResource("10")
+
+[node name="CharacterSetupService" type="Node" parent="."]
+script = ExtResource("11")
+
+[node name="PlayerSpawnService" type="Node" parent="."]
+script = ExtResource("12")
+
+[node name="SessionPersistenceService" type="Node" parent="."]
+script = ExtResource("13")
+
+[node name="WorldDropService" type="Node" parent="."]
+script = ExtResource("14")
+
+[node name="UseAuthorityService" type="Node" parent="."]
+script = ExtResource("17")
+
+[node name="BreakVisualService" type="Node" parent="."]
+script = ExtResource("18")
 
 [node name="ScreenEffects" type="Node" parent="." unique_id=733833882]
 script = ExtResource("5")
