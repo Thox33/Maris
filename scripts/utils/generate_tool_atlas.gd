@@ -42,8 +42,8 @@ func _draw_stone_pickaxe(image: Image, cell: Vector2i) -> void:
 		Vector2i(4, 6),
 	]
 	for point in handle_points:
-		_set_px(image, origin + point, wood_light)
-		_set_px(image, origin + point + Vector2i(0, 1), wood_dark)
+		_set_tool_px(image, origin, point, wood_light)
+		_set_tool_px(image, origin, point + Vector2i(0, 1), wood_dark)
 
 	var head_light := [
 		Vector2i(3, 3),
@@ -56,7 +56,7 @@ func _draw_stone_pickaxe(image: Image, cell: Vector2i) -> void:
 		Vector2i(3, 4),
 	]
 	for point in head_light:
-		_set_px(image, origin + point, stone_light)
+		_set_tool_px(image, origin, point, stone_light)
 
 	var head_mid := [
 		Vector2i(2, 5),
@@ -69,7 +69,7 @@ func _draw_stone_pickaxe(image: Image, cell: Vector2i) -> void:
 		Vector2i(7, 3),
 	]
 	for point in head_mid:
-		_set_px(image, origin + point, stone_mid)
+		_set_tool_px(image, origin, point, stone_mid)
 
 	var head_dark := [
 		Vector2i(1, 5),
@@ -84,7 +84,7 @@ func _draw_stone_pickaxe(image: Image, cell: Vector2i) -> void:
 		Vector2i(7, 2),
 	]
 	for point in head_dark:
-		_set_px(image, origin + point, stone_dark)
+		_set_tool_px(image, origin, point, stone_dark)
 
 	var highlight_points := [
 		Vector2i(6, 1),
@@ -93,7 +93,12 @@ func _draw_stone_pickaxe(image: Image, cell: Vector2i) -> void:
 		Vector2i(3, 2),
 	]
 	for point in highlight_points:
-		_set_px(image, origin + point, Color8(197, 205, 214, 255))
+		_set_tool_px(image, origin, point, Color8(197, 205, 214, 255))
+
+
+func _set_tool_px(image: Image, origin: Vector2i, local_point: Vector2i, color: Color) -> void:
+	var mirrored_point := Vector2i(TILE_SIZE - 1 - local_point.x, local_point.y)
+	_set_px(image, origin + mirrored_point, color)
 
 
 func _set_px(image: Image, point: Vector2i, color: Color) -> void:

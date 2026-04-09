@@ -2,6 +2,7 @@ extends CanvasLayer
 ## Local player inventory HUD.
 ## Hotbar always visible. Inventory panel above it can be toggled.
 
+const ITEM_ICON_VISUALS := preload("res://scripts/items/item_icon_visuals.gd")
 const WORLD_INPUT_BLOCKER_GROUP := &"world_input_blocking_ui"
 const INVENTORY_TOGGLE_ACTION := &"inventory_toggle"
 const SLOT_SIZE := 40.0
@@ -502,6 +503,7 @@ func _create_slot_widget(parent: Control, slot_index: int, show_hotkey: bool) ->
 	icon.size = Vector2(SLOT_ICON_SIZE, SLOT_ICON_SIZE)
 	icon.position = Vector2(-SLOT_ICON_SIZE * 0.4, -SLOT_ICON_SIZE * 0.4)
 	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	slot_root.add_child(icon)
 
 	var count_label := Label.new()
@@ -556,6 +558,7 @@ func _build_held_preview() -> void:
 	_held_preview_icon.size = Vector2(SLOT_ICON_SIZE, SLOT_ICON_SIZE)
 	_held_preview_icon.position = Vector2(-SLOT_ICON_SIZE * 0.4, -SLOT_ICON_SIZE * 0.4)
 	_held_preview_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_held_preview_icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	slot_root.add_child(_held_preview_icon)
 
 	_held_preview_count = Label.new()
@@ -658,7 +661,4 @@ func _is_inventory_toggle_key(event: InputEventKey) -> bool:
 
 
 func _build_slot_icon_texture(item_id: int) -> Texture2D:
-	var item_props: ItemProperties = ItemProperties.get_properties(item_id)
-	if item_props == null:
-		return null
-	return item_props.build_icon_texture()
+	return ITEM_ICON_VISUALS.build_outlined_icon_texture(item_id)

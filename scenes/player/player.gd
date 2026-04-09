@@ -28,6 +28,7 @@ var _locomotion_state: String = ACTOR_STATE.LOCOMOTION_IDLE
 var _active_action: String = ACTOR_STATE.ACTION_NONE
 var _side_view_mirrored: bool = false
 var _held_item_id: int = ITEM_PROPERTIES.NONE
+var _look_dir: Vector2 = Vector2.RIGHT
 var _inventory_manager: Node
 
 
@@ -81,6 +82,11 @@ func _process(delta: float) -> void:
 		return
 	if is_multiplayer_authority():
 		_refresh_equipped_item_state()
+		var mouse_offset := get_global_mouse_position() - global_position
+		if mouse_offset.length_squared() > 1.0:
+			_look_dir = mouse_offset.normalized()
+		if _humanoid_visual != null:
+			_humanoid_visual.set_look_direction(_look_dir)
 	if not is_multiplayer_authority():
 		_update_remote_motion(delta)
 
@@ -118,7 +124,7 @@ func _physics_process(delta: float) -> void:
 	_sync_timer += delta
 	if _sync_timer >= GameConstants.POSITION_SYNC_INTERVAL:
 		_sync_timer = 0.0
-		_sync_state.rpc(position, velocity, _held_item_id)
+		_sync_state.rpc(position, velocity, _held_item_id, _look_dir)
 
 
 func _update_remote_motion(delta: float) -> void:
@@ -186,12 +192,15 @@ func _get_tile_speed_factor() -> float:
 
 
 @rpc("authority", "unreliable")
-func _sync_state(pos: Vector2, vel: Vector2, held_item_id: int) -> void:
+func _sync_state(pos: Vector2, vel: Vector2, held_item_id: int, look_dir: Vector2) -> void:
 	if multiplayer.multiplayer_peer == null:
 		return
 	if not is_multiplayer_authority():
 		_apply_remote_held_item_state(held_item_id)
 		_push_remote_state(pos, vel)
+		_look_dir = look_dir
+		if _humanoid_visual != null:
+			_humanoid_visual.set_look_direction(look_dir)
 
 
 func apply_server_teleport(pos: Vector2) -> void:
@@ -264,6 +273,10 @@ func get_actor_display_name() -> String:
 		if not _character_name.is_empty()
 		else NetworkManager.get_player_visible_name(get_multiplayer_authority())
 	)
+
+
+func get_actor_look_dir() -> Vector2:
+	return _look_dir
 
 
 func get_actor_facing() -> String:

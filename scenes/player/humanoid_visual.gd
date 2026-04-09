@@ -2,16 +2,11 @@ class_name HumanoidVisual
 extends Node2D
 
 const ACTOR_STATE := preload("res://scripts/actor/actor_state.gd")
+const ITEM_ICON_VISUALS := preload("res://scripts/items/item_icon_visuals.gd")
 const CHARACTER_APPEARANCE := preload("res://scripts/player/character_appearance.gd")
 const HUMANOID_VISUAL_PROFILE := preload("res://scripts/player/humanoid_visual_profile.gd")
 const ITEM_PROPERTIES := preload("res://scripts/items/item_properties.gd")
 
-const _DEFAULT_HELD_ITEM_SCALE := Vector2(0.45, 0.45)
-const _TOOL_HELD_ITEM_SCALE := Vector2(0.75, 0.75)
-const _DEFAULT_HELD_ITEM_VISUAL_OFFSET := Vector2(-1, 0)
-const _TOOL_HELD_ITEM_VISUAL_OFFSET := Vector2(-1, 0)
-const _DEFAULT_HELD_ITEM_ROTATION := deg_to_rad(18.0)
-const _TOOL_HELD_ITEM_ROTATION := deg_to_rad(35.0)
 
 @onready var _body: AnimatedSprite2D = $Body
 @onready var _hair: AnimatedSprite2D = $Hair
@@ -26,6 +21,20 @@ var _inventory_manager: Node
 var _held_item_sprite: Sprite2D
 var _displayed_held_item_id: int = ITEM_PROPERTIES.NONE
 var _current_held_item_id: int = ITEM_PROPERTIES.NONE
+var _face_anchor: Node2D
+var _eye_sprite: Sprite2D
+var _mouth_sprite: Sprite2D
+
+# Eye frame indices matching eyes_directions.png layout
+const _EYE_NEUTRAL := 0
+const _EYE_RIGHT := 1
+const _EYE_UP_RIGHT := 2
+const _EYE_UP := 3
+const _EYE_UP_LEFT := 4
+const _EYE_LEFT := 5
+const _EYE_DOWN_LEFT := 6
+const _EYE_DOWN := 7
+const _EYE_DOWN_RIGHT := 8
 
 
 func _ready() -> void:
@@ -77,6 +86,7 @@ func _on_actor_state_changed() -> void:
 
 func _on_body_frame_changed() -> void:
 	_update_held_item_anchor()
+	_update_face_anchor()
 
 
 func _refresh_from_actor() -> void:
@@ -115,8 +125,15 @@ func _play_animation(anim_name: String) -> void:
 	if _body.sprite_frames != null and _body.sprite_frames.has_animation(anim_name):
 		_body.play(anim_name)
 	_update_held_item_anchor()
+	_update_face_anchor()
 	if _hair.sprite_frames != null and _hair.sprite_frames.has_animation(anim_name):
 		_hair.play(anim_name)
+
+
+func set_look_direction(world_dir: Vector2) -> void:
+	if _eye_sprite == null:
+		return
+	_set_eye_frame(_look_dir_to_eye_frame(world_dir))
 
 
 func _load_sprites() -> void:
@@ -127,6 +144,85 @@ func _load_sprites() -> void:
 		_update_held_item_anchor()
 	_hair.visible = false
 	_face.visible = false
+	_setup_face()
+
+
+func _setup_face() -> void:
+	if _face_anchor == null:
+		_face_anchor = Node2D.new()
+		_face_anchor.name = "FaceAnchor"
+		add_child(_face_anchor)
+		# Face must render above body/hair but below held item
+		if _held_item_anchor != null:
+			move_child(_face_anchor, _held_item_anchor.get_index())
+	if _eye_sprite == null:
+		_eye_sprite = Sprite2D.new()
+		_eye_sprite.name = "EyeSprite"
+		_eye_sprite.centered = true
+		_eye_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		_face_anchor.add_child(_eye_sprite)
+	var eye_texture := _load_texture(_profile.eye_path)
+	if eye_texture != null:
+		_eye_sprite.texture = eye_texture
+		_eye_sprite.region_enabled = true
+		_set_eye_frame(_EYE_NEUTRAL)
+	_eye_sprite.position = _profile.eye_local_offset
+	if _mouth_sprite == null:
+		_mouth_sprite = Sprite2D.new()
+		_mouth_sprite.name = "MouthSprite"
+		_mouth_sprite.centered = true
+		_mouth_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		_face_anchor.add_child(_mouth_sprite)
+	var mouth_texture := _load_texture(_profile.mouth_path)
+	if mouth_texture != null:
+		_mouth_sprite.texture = mouth_texture
+		_mouth_sprite.region_enabled = true
+		_mouth_sprite.region_rect = Rect2(0, 0, _profile.mouth_frame_width, _profile.mouth_frame_height)
+	_mouth_sprite.position = _profile.mouth_local_offset
+	_mouth_sprite.scale.x = scale.x
+	_update_face_anchor()
+
+
+func _update_face_anchor() -> void:
+	if _face_anchor == null:
+		return
+	var anim_name: String = (
+		_current_animation if not _current_animation.is_empty() else String(_body.animation)
+	)
+	var frame_index: int = _body.frame if _body != null else 0
+	_face_anchor.position = _profile.get_face_offset(anim_name, frame_index)
+
+
+func _set_eye_frame(frame: int) -> void:
+	if _eye_sprite == null:
+		return
+	var fw := _profile.eye_frame_width
+	var fh := _profile.eye_frame_height
+	_eye_sprite.region_rect = Rect2(frame * fw, 0, fw, fh)
+	# Counteract parent scale so face textures are never auto-mirrored
+	# (all 8 directions are explicitly painted)
+	_eye_sprite.scale.x = scale.x
+	if _mouth_sprite != null:
+		_mouth_sprite.scale.x = scale.x
+
+
+func _look_dir_to_eye_frame(dir: Vector2) -> int:
+	if dir.is_zero_approx():
+		return _EYE_NEUTRAL
+	# angle(): 0=right, π/2=down, ±π=left, -π/2=up
+	var sector := int(round(dir.angle() / (PI / 4.0))) % 8
+	if sector < 0:
+		sector += 8
+	match sector:
+		0: return _EYE_RIGHT
+		1: return _EYE_DOWN_RIGHT
+		2: return _EYE_DOWN
+		3: return _EYE_DOWN_LEFT
+		4: return _EYE_LEFT
+		5: return _EYE_UP_LEFT
+		6: return _EYE_UP
+		7: return _EYE_UP_RIGHT
+	return _EYE_NEUTRAL
 
 
 func _build_body_frames() -> SpriteFrames:
@@ -152,8 +248,9 @@ func _ensure_held_item_sprite() -> void:
 		return
 	_held_item_sprite = Sprite2D.new()
 	_held_item_sprite.name = "HeldItemSprite"
-	_held_item_sprite.centered = true
-	_held_item_sprite.scale = _DEFAULT_HELD_ITEM_SCALE
+	_held_item_sprite.centered = false
+	_held_item_sprite.offset = Vector2.ZERO
+	_held_item_sprite.scale = Vector2.ONE
 	_held_item_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_held_item_sprite.visible = false
 	_held_item_anchor.add_child(_held_item_sprite)
@@ -194,6 +291,7 @@ func _update_held_item_anchor() -> void:
 	_held_item_anchor.position = (
 		_profile.get_held_item_offset(anim_name, frame_index) + _held_item_grip_offset
 	)
+	_update_held_item_rotation(anim_name, frame_index)
 
 
 func _apply_held_item_id(item_id: int) -> void:
@@ -222,7 +320,7 @@ func _refresh_held_item_visual() -> void:
 	if props == null:
 		_hide_held_item_visual()
 		return
-	var icon_texture: Texture2D = props.build_icon_texture()
+	var icon_texture: Texture2D = ITEM_ICON_VISUALS.build_outlined_icon_texture(item_id)
 	if icon_texture == null:
 		_hide_held_item_visual()
 		return
@@ -235,19 +333,15 @@ func _refresh_held_item_visual() -> void:
 func _apply_held_item_visual_style(props: ItemProperties) -> void:
 	if _held_item_sprite == null:
 		return
-	_held_item_sprite.scale = (
-		_TOOL_HELD_ITEM_SCALE if props != null and props.is_tool() else _DEFAULT_HELD_ITEM_SCALE
-	)
-	_held_item_sprite.position = (
-		_TOOL_HELD_ITEM_VISUAL_OFFSET
-		if props != null and props.is_tool()
-		else _DEFAULT_HELD_ITEM_VISUAL_OFFSET
-	)
-	_held_item_sprite.rotation = (
-		_TOOL_HELD_ITEM_ROTATION
-		if props != null and props.is_tool()
-		else _DEFAULT_HELD_ITEM_ROTATION
-	)
+	var grip_point := Vector2.ZERO
+	var texture := _held_item_sprite.texture
+	if props != null and texture != null:
+		var texture_size := Vector2(float(texture.get_width()), float(texture.get_height()))
+		grip_point = props.get_hold_grip_point(texture_size)
+	_held_item_sprite.scale = props.get_hold_scale() if props != null else Vector2.ONE
+	_held_item_sprite.position = Vector2.ZERO
+	_held_item_sprite.offset = -grip_point
+	_update_held_item_rotation()
 
 
 func _hide_held_item_visual() -> void:
@@ -257,8 +351,27 @@ func _hide_held_item_visual() -> void:
 	_held_item_sprite.texture = null
 	_held_item_sprite.visible = false
 	_held_item_sprite.rotation = 0.0
-	_held_item_sprite.position = _DEFAULT_HELD_ITEM_VISUAL_OFFSET
+	_held_item_sprite.position = Vector2.ZERO
+	_held_item_sprite.offset = Vector2.ZERO
+	_held_item_sprite.scale = Vector2.ONE
 
 
 func _should_show_held_item_visual() -> bool:
 	return true
+
+
+func _update_held_item_rotation(anim_name: String = "", frame_index: int = -1) -> void:
+	if _held_item_sprite == null:
+		return
+	var resolved_anim: String = anim_name
+	if resolved_anim.is_empty():
+		resolved_anim = _current_animation if not _current_animation.is_empty() else String(_body.animation)
+	var resolved_frame: int = frame_index
+	if resolved_frame < 0:
+		resolved_frame = _body.frame if _body != null else 0
+	var props: ItemProperties = ITEM_PROPERTIES.get_properties(_current_held_item_id)
+	var is_tool := props != null and props.is_tool()
+	var base_rotation := _profile.get_held_item_base_rotation(is_tool)
+	_held_item_sprite.rotation = (
+		base_rotation + _profile.get_held_item_rotation_offset(resolved_anim, resolved_frame)
+	)

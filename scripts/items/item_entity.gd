@@ -3,6 +3,8 @@ extends CharacterBody2D
 ## gentle underwater drift, pickup via Area2D overlap, and a despawn timer.
 ## Host-authoritative: only the server runs physics and pickup logic.
 
+const ITEM_ICON_VISUALS := preload("res://scripts/items/item_icon_visuals.gd")
+
 var item_id: int = ItemProperties.NONE
 var count: int = 1
 
@@ -181,15 +183,11 @@ func _setup_sprite() -> void:
 	if sprite == null:
 		return
 
-	# Use the tile atlas as the item sprite source.
-	var item_props := ItemProperties.get_properties(item_id)
-	if item_props == null:
+	var icon_texture := ITEM_ICON_VISUALS.build_outlined_icon_texture(item_id)
+	if icon_texture == null:
 		return
 
-	var atlas_texture := item_props.build_icon_texture()
-	if atlas_texture == null:
-		return
-
-	sprite.texture = atlas_texture
+	sprite.texture = icon_texture
+	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	# Scale down slightly so the drop looks smaller than a placed tile.
 	sprite.scale = Vector2(0.65, 0.65)

@@ -1,5 +1,7 @@
 class_name ItemProperties
 extends RefCounted
+
+const ITEM_HOLD_STYLE_CATALOG := preload("res://scripts/items/item_hold_style_catalog.gd")
 ## Central registry of all item types.
 ## Separate from TileProperties — linked via optional tile_id field.
 ## Integer IDs are stable and permanent — never reuse a removed ID.
@@ -47,7 +49,8 @@ static var registry: Dictionary = {
 		0.18,
 		ToolKind.PICKAXE,
 		"res://assets/tilesets/tool_items.png",
-		Vector2i(0, 0)
+		Vector2i(0, 0),
+		ITEM_HOLD_STYLE_CATALOG.STYLE_TOOL_UP_RIGHT
 	),
 }
 
@@ -84,6 +87,12 @@ var break_damage: float
 var use_cooldown: float
 ## Optional tool classification for gameplay rules and balancing.
 var tool_kind: ToolKind
+## Style profile for held rendering.
+var hold_style_id: String
+## Optional item-specific additional shift from the resolved grip pixel.
+var hold_grip_offset: Vector2
+## Optional absolute scale override. Negative values mean "use style default".
+var hold_scale_override: Vector2
 
 
 func _init(
@@ -99,6 +108,9 @@ func _init(
 	p_tool_kind: ToolKind = ToolKind.NONE,
 	p_icon_atlas_path: String = "",
 	p_icon_atlas_coord: Vector2i = INVALID_ICON_COORD,
+	p_hold_style_id: String = "",
+	p_hold_grip_offset: Vector2 = Vector2.ZERO,
+	p_hold_scale_override: Vector2 = Vector2(-1, -1),
 ) -> void:
 	id = p_id
 	name = p_name
@@ -112,6 +124,9 @@ func _init(
 	break_damage = maxf(p_break_damage, 0.0)
 	use_cooldown = maxf(p_use_cooldown, 0.0)
 	tool_kind = p_tool_kind
+	hold_style_id = p_hold_style_id
+	hold_grip_offset = p_hold_grip_offset
+	hold_scale_override = p_hold_scale_override
 
 
 ## Returns properties for an item ID, or null if not found.
@@ -200,3 +215,35 @@ func get_tool_kind() -> ToolKind:
 
 func is_tool() -> bool:
 	return tool_kind != ToolKind.NONE
+
+
+func get_hold_style_id() -> String:
+	if not hold_style_id.is_empty():
+		return hold_style_id
+	return (
+		ITEM_HOLD_STYLE_CATALOG.STYLE_TOOL_UP_RIGHT
+		if is_tool()
+		else ITEM_HOLD_STYLE_CATALOG.STYLE_SMALL_ITEM
+	)
+
+
+func get_hold_scale() -> Vector2:
+	if hold_scale_override.x >= 0.0 and hold_scale_override.y >= 0.0:
+		return hold_scale_override
+	var style := ITEM_HOLD_STYLE_CATALOG.get_style(get_hold_style_id())
+	return style.get("scale", Vector2.ONE) as Vector2
+
+
+func get_hold_grip_point(texture_size: Vector2) -> Vector2:
+	var style := ITEM_HOLD_STYLE_CATALOG.get_style(get_hold_style_id())
+	var grip_mode := String(style.get("grip_mode", "bottom_center"))
+	var grip_point := _resolve_hold_grip_point(grip_mode, texture_size)
+	var style_offset := style.get("grip_pixel_offset", Vector2.ZERO) as Vector2
+	return grip_point + style_offset + hold_grip_offset
+
+
+func _resolve_hold_grip_point(grip_mode: String, texture_size: Vector2) -> Vector2:
+	match grip_mode:
+		"bottom_center":
+			return Vector2((texture_size.x - 1.0) * 0.5, texture_size.y - 1.0)
+	return texture_size * 0.5
