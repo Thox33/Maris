@@ -5,13 +5,13 @@ var _player: CharacterBody2D
 var _label: Label
 var _direction_overlay: Control
 var _chunk_debug_overlay: Node
-var _world: Node
+var _chunk_manager: Node
 var _items_node: Node
 var _players_node: Node
 
 
-func setup_session(world: Node, items_node: Node, players_node: Node, chunk_debug_overlay: Node) -> void:
-	_world = world
+func setup_session(chunk_manager: Node, items_node: Node, players_node: Node, chunk_debug_overlay: Node) -> void:
+	_chunk_manager = chunk_manager
 	_items_node = items_node
 	_players_node = players_node
 	_chunk_debug_overlay = chunk_debug_overlay
@@ -72,7 +72,6 @@ func _update_text() -> void:
 		role = "Host"
 
 	var fps := Engine.get_frames_per_second()
-	var chunk_manager := _world.get_node_or_null("ChunkManager") if _world != null else null
 	var tile_coord := Vector2i(
 		floori(_player.global_position.x / GameConstants.TILE_SIZE),
 		floori(_player.global_position.y / GameConstants.TILE_SIZE)
@@ -87,8 +86,8 @@ func _update_text() -> void:
 		ping_text = "%.1f ms" % NetworkManager.ping_ms
 
 	var loaded_chunks := 0
-	if chunk_manager != null:
-		loaded_chunks = chunk_manager.loaded_chunks.size()
+	if _chunk_manager != null:
+		loaded_chunks = _chunk_manager.loaded_chunks.size()
 
 	var player_count := 0
 	if _players_node != null:

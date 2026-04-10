@@ -11,7 +11,8 @@ Godot 4.6, GDScript, host-as-server multiplayer. Terraria-inspired but entirely 
 Main (Node2D)                         scenes/main/main.gd
 ├── World (WorldGenerator)            scenes/world/world_generator.gd
 │   ├── TerrainLayer (TileMapLayer)   terrain_tileset.tres
-│   ├── PlantLayer (TileMapLayer)     terrain_tileset.tres  ← plant/coral overlay, carries coral_sway shader
+│   ├── BaseVisualLayer (TileMapLayer) terrain_tileset.tres
+│   ├── PlantLayer (TileMapLayer)     terrain_tileset.tres  ← plant/coral overlay, carries vegetation_sway shader
 │   └── ChunkManager (Node)           scripts/world/chunk_manager.gd
 ├── Players (Node2D)
 │   └── <PeerId> (CharacterBody2D)    scenes/player/player.gd
@@ -34,7 +35,7 @@ Main (Node2D)                         scenes/main/main.gd
 - `ChunkManager` checks player positions every 0.2s, load radius=3, unload radius=5 (hysteresis)
 - Host generates chunks from noise, clients request via RPC
 - `ChunkData` stores base_tiles + modifications separately (compact save format)
-- Plant/coral tiles are mirrored onto `PlantLayer` for the sway shader; `TerrainLayer` remains the authority for physics/speed checks
+- Plant/coral tiles render on `PlantLayer` for the sway shader, while `BaseVisualLayer` skips them; `TerrainLayer` remains the authority for physics/speed checks
 
 ### Tile System
 - 3 tile types: Sand (solid), Stone (solid), Coral (swim-through, slows to 40%)
@@ -95,7 +96,7 @@ Main (Node2D)                         scenes/main/main.gd
 ### Visual Effects
 Three-layer separation: World-Rendering | Screen-Effects | Gameplay-Data
 
-- `coral_sway.gdshader` — vertex displacement on `PlantLayer` (World-layer, active)
+- `vegetation_sway.gdshader` — vertex displacement on `PlantLayer` (World-layer, active)
 - `underwater.gdshader` — fullscreen wave distortion + blue tint (Screen-layer)
   - Owned by `ScreenEffects` node in `main.tscn` (CanvasLayer 100 → ColorRect)
   - `ScreenEffects.set_underwater(bool)` to toggle — currently always on

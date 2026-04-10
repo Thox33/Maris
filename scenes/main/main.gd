@@ -49,7 +49,7 @@ func _ready() -> void:
 	_world_placement_service.setup(_players, world.chunk_manager, world.structure_manager)
 	inventory_manager.setup(_inventory_authority_service, _world_placement_service)
 	_use_authority_service.setup(_players, world.chunk_manager, world.structure_manager, inventory_manager)
-	_break_visual_service.setup(world)
+	_break_visual_service.setup(world, world.depth_sorted)
 	_use_authority_service.damaged_target_updated.connect(
 		Callable(_break_visual_service, "apply_damaged_target")
 	)
@@ -86,7 +86,7 @@ func _ready() -> void:
 		_session_persistence_service
 	)
 	_world_drop_service.setup(_item_spawner, inventory_manager)
-	var chunk_debug_overlay := world.get_node_or_null("ChunkDebugCanvas/ChunkDebugOverlay")
+	var chunk_debug_overlay: Node = world.chunk_debug_overlay
 	if chunk_debug_overlay != null and chunk_debug_overlay.has_method("setup_chunk_manager"):
 		chunk_debug_overlay.setup_chunk_manager(world.chunk_manager)
 	_session_bootstrap_service.setup(
@@ -98,7 +98,7 @@ func _ready() -> void:
 
 	NetworkManager.session_ended.connect(_on_session_ended)
 	get_tree().auto_accept_quit = false
-	ChatManager.set_session_context(world, _players, inventory_manager)
+	ChatManager.set_session_context(_players, inventory_manager, world.chunk_manager)
 
 	var world_name := selected_world_name if not selected_world_name.is_empty() else DEFAULT_WORLD_NAME
 	_session_bootstrap_service.bootstrap_session(world_name, dedicated_server)

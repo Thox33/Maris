@@ -1,6 +1,5 @@
 extends Control
 
-@onready var _stack: VBoxContainer = $Stack
 @onready var _name_label: Label = $Stack/NameLabel
 @onready var _health_bar: ProgressBar = $Stack/HealthBar
 @onready var _mana_bar: ProgressBar = $Stack/ManaBar

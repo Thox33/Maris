@@ -3,7 +3,8 @@
 ; World generator scene:
 ;   WorldGenerator (Node2D) — procedural generation logic
 ;     ├── TerrainLayer (TileMapLayer) — tile grid with terrain_tileset.tres
-;     ├── PlantLayer (TileMapLayer) — plant tiles, carries sway shader
+;     ├── BaseVisualLayer (TileMapLayer) — visible flat tile visuals
+;     ├── PlantLayer (TileMapLayer) — plant tiles, carries vegetation sway shader
 ;     └── ChunkManager (Node) — orchestrates chunk loading/unloading/network
 
 [ext_resource type="Script" path="res://scenes/world/world_generator.gd" id="1"]

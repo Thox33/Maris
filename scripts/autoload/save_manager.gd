@@ -1,5 +1,5 @@
 extends Node
-const CHARACTER_APPEARANCE := preload("res://scripts/player/character_appearance.gd")
+const CHARACTER_APPEARANCE := preload("res://scripts/actor/character_appearance.gd")
 ## Manages world persistence — chunk modifications, player data, and world metadata.
 ## Autoloaded as "SaveManager". All write operations are server-only.
 ##

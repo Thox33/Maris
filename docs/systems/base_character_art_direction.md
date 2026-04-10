@@ -166,11 +166,12 @@ Reject a V1 base character immediately if any of these are true:
 
 The V1 humanoid is ready for PNG production only when:
 
-- the silhouette is stable in `down`, `side`, and `up`
+- the side-view silhouette is stable in the idle and move poses
 - the head-to-body ratio feels intentionally chibi
 - the side view reads cleanly without confusion
 - the torso and head join cleanly
 - the limb attachment points no longer feel arbitrary
+- the character still works when mirrored for left-facing presentation
 - the character still works without animation
 
 ## Production Guidance
@@ -178,7 +179,7 @@ The V1 humanoid is ready for PNG production only when:
 When generating or drawing PNG layers for the base character:
 
 - start from silhouette first, not color detail
-- lock `down`, `side`, and `up` before any animation frames
+- lock the side-view silhouette before any animation frames
 - keep one hairstyle only for V1
 - prefer one strong base character over early customization breadth
 

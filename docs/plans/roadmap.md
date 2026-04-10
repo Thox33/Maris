@@ -11,9 +11,9 @@ See also:
 
 See [`session_architecture_refactor_plan.md`](session_architecture_refactor_plan.md).
 
-- [ ] Split `main.gd` into smaller session services
-- [ ] Reduce direct scene-path coupling between runtime systems
-- [ ] Narrow `InventoryManager` to inventory-specific concerns
+- [x] Split `main.gd` into smaller session services
+- [x] Reduce direct scene-path coupling between runtime systems
+- [x] Narrow `InventoryManager` into an RPC bridge backed by dedicated authority / placement services
 - [x] Decide and document the authority model baseline
 - [x] Move block and structure breaking to host-authoritative item-use damage + cooldown
 
@@ -78,7 +78,8 @@ ChunkData already has `base_tiles` + `modifications` separately - the hard part 
 - [ ] Animated tiles (AnimatedSprite2D or animated atlas - waving seaweed, pulsing coral)
 - [ ] Better bubble particles (GPUParticles2D instead of CPUParticles2D)
 - [ ] Minimap (SubViewport rendering a zoomed-out world view)
-- [ ] Player animation (swim cycle, idle)
+- [x] Player animation baseline (side-view `idle` / `run`)
+- [ ] Additional player action states (`use`, `hurt`, `attack`)
 - [ ] Background parallax layers (distant rock formations, fog)
 
 ---

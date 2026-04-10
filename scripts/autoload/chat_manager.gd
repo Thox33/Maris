@@ -5,9 +5,9 @@ extends Node
 
 var is_chat_open: bool = false
 var commands: CommandRegistry
-var _session_world: Node
 var _session_players: Node
 var _session_inventory_manager: Node
+var _session_chunk_manager: Node
 
 signal message_received(msg: Dictionary)
 
@@ -54,16 +54,16 @@ func close_chat() -> void:
 	is_chat_open = false
 
 
-func set_session_context(world: Node, players_node: Node, inventory_manager: Node) -> void:
-	_session_world = world
+func set_session_context(players_node: Node, inventory_manager: Node, chunk_manager: Node) -> void:
 	_session_players = players_node
 	_session_inventory_manager = inventory_manager
+	_session_chunk_manager = chunk_manager
 
 
 func clear_session_context() -> void:
-	_session_world = null
 	_session_players = null
 	_session_inventory_manager = null
+	_session_chunk_manager = null
 
 
 func _on_session_ended(_reason: String) -> void:
@@ -101,11 +101,11 @@ func _process_command(sender_id: int, raw: String) -> void:
 	var parts := raw.split(" ", false)
 	if parts.is_empty():
 		return
-	var name: String = parts[0]
+	var command_name: String = parts[0]
 	var args: Array[String] = []
 	for i: int in range(1, parts.size()):
 		args.append(parts[i])
-	var lines: Array[String] = commands.execute(sender_id, name, args)
+	var lines: Array[String] = commands.execute(sender_id, command_name, args)
 	for line: String in lines:
 		_send_system_to_peer(sender_id, line)
 
@@ -170,11 +170,8 @@ func _cmd_tp(sender_id: int, args: Array[String]) -> Array[String]:
 		tile_y * GameConstants.TILE_SIZE + GameConstants.TILE_SIZE / 2.0,
 	)
 
-	var world := _session_world
-	if world != null:
-		var chunk_manager := world.get_node_or_null("ChunkManager")
-		if chunk_manager != null:
-			chunk_manager.load_chunks_around(world_pos)
+	if _session_chunk_manager != null:
+		_session_chunk_manager.load_chunks_around(world_pos)
 
 	player.global_position = world_pos
 	player.velocity = Vector2.ZERO

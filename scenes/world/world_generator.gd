@@ -17,9 +17,27 @@ var noise := FastNoiseLite.new()
 var world_seed: int = 0
 
 @onready var terrain_layer: TileMapLayer = $TerrainLayer
+@onready var base_visual_layer: TileMapLayer = $BaseVisualLayer
 @onready var plant_layer: TileMapLayer = $PlantLayer
 @onready var chunk_manager: Node = $ChunkManager
 @onready var structure_manager: Node = $StructureManager
+@onready var depth_sorted: Node2D = $DepthSorted
+@onready var players_node: Node = $DepthSorted/Players
+@onready var chunk_debug_overlay: Node = $ChunkDebugCanvas/ChunkDebugOverlay
+
+
+func _ready() -> void:
+	if chunk_manager != null and chunk_manager.has_method("setup"):
+		chunk_manager.setup(
+			self,
+			terrain_layer,
+			base_visual_layer,
+			plant_layer,
+			depth_sorted,
+			players_node
+		)
+	if structure_manager != null and structure_manager.has_method("setup"):
+		structure_manager.setup(self, chunk_manager, depth_sorted)
 
 
 ## Initializes noise with the given seed. Must be called before generate_chunk().
@@ -29,11 +47,11 @@ func initialize(seed_value: int) -> void:
 	noise.frequency = 0.05
 	noise.seed = seed_value
 	_diagnose_and_fix_physics()
-	_setup_plant_shader()
+	_setup_vegetation_sway_shader()
 
 
-func _setup_plant_shader() -> void:
-	var shader := load("res://assets/shaders/coral_sway.gdshader") as Shader
+func _setup_vegetation_sway_shader() -> void:
+	var shader := load("res://assets/shaders/vegetation_sway.gdshader") as Shader
 	if shader == null:
 		return
 	var mat := ShaderMaterial.new()

@@ -1,7 +1,7 @@
 extends Node
 
 const MENU_STYLES := preload("res://scripts/ui/menu_styles.gd")
-const CHARACTER_APPEARANCE := preload("res://scripts/player/character_appearance.gd")
+const CHARACTER_APPEARANCE := preload("res://scripts/actor/character_appearance.gd")
 
 var _join_service: Node
 var _player_spawn_service: Node

@@ -11,6 +11,7 @@ const _PARTICLE_LIFETIME_MIN: float = 0.3
 const _PARTICLE_LIFETIME_MAX: float = 0.55
 
 var world: Node2D
+var _visual_parent: Node2D
 var _visual_root: Node2D
 var _crack_texture: Texture2D
 var _visuals_by_key: Dictionary = {}
@@ -19,8 +20,9 @@ var _atlas_image_cache: Dictionary = {}
 var _pixel_texture: ImageTexture = null
 
 
-func setup(p_world: Node2D) -> void:
+func setup(p_world: Node2D, p_visual_parent: Node2D) -> void:
 	world = p_world
+	_visual_parent = p_visual_parent
 	_ensure_visual_root()
 	_ensure_crack_texture()
 	GameEvents.block_broken.connect(_on_block_broken)
@@ -90,11 +92,11 @@ func _ensure_visual_root() -> void:
 		return
 	if _visual_root != null and is_instance_valid(_visual_root):
 		return
-	_visual_root = world.get_node_or_null("DepthSorted/BreakVisuals")
-	if _visual_root == null:
-		_visual_root = Node2D.new()
-		_visual_root.name = "BreakVisuals"
-		world.get_node("DepthSorted").add_child(_visual_root)
+	if _visual_parent == null:
+		return
+	_visual_root = Node2D.new()
+	_visual_root.name = "BreakVisuals"
+	_visual_parent.add_child(_visual_root)
 
 
 func _ensure_crack_texture() -> void:

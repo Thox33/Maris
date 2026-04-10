@@ -63,8 +63,6 @@ func _ready() -> void:
 		set_process_unhandled_input(false)
 		return
 
-	if _block_interaction == null:
-		_block_interaction = get_parent().get_node_or_null("BlockInteraction")
 	_hotbar_actions = _build_hotbar_actions()
 
 	_create_styles()
@@ -469,8 +467,8 @@ func _build_slots() -> void:
 
 	for row: int in range(INVENTORY_ROWS, 0, -1):
 		var row_start: int = row * GameConstants.HOTBAR_SIZE
-		for offset: int in range(GameConstants.HOTBAR_SIZE):
-			var slot_index: int = row_start + offset
+		for column_offset: int in range(GameConstants.HOTBAR_SIZE):
+			var slot_index: int = row_start + column_offset
 			_body_slot_indices.append(slot_index)
 			_create_slot_widget(_body_grid, slot_index, false)
 
@@ -511,8 +509,8 @@ func _create_slot_widget(parent: Control, slot_index: int, show_hotkey: bool) ->
 	count_label.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
 	count_label.add_theme_font_size_override("font_size", 12)
 	count_label.modulate = Color(1.0, 1.0, 1.0, 0.9)
-	count_label.set_anchors_and_offsets_preset(Control.PRESET_LEFT_WIDE)
-	count_label.position = Vector2(4.0, -24.0)
+	count_label.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
+	count_label.position = Vector2(4.0, 10.0)
 	count_label.size = Vector2(24.0, 14.0)
 	count_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	slot_root.add_child(count_label)
@@ -566,7 +564,7 @@ func _build_held_preview() -> void:
 	_held_preview_count.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
 	_held_preview_count.add_theme_font_size_override("font_size", 12)
 	_held_preview_count.modulate = Color(1.0, 1.0, 1.0, 0.95)
-	_held_preview_count.set_anchors_and_offsets_preset(Control.PRESET_LEFT_WIDE)
+	_held_preview_count.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
 	_held_preview_count.position = Vector2(4.0, -24.0)
 	_held_preview_count.size = Vector2(24.0, 14.0)
 	_held_preview_count.mouse_filter = Control.MOUSE_FILTER_IGNORE

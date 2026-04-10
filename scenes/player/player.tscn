@@ -8,7 +8,7 @@
 [ext_resource type="PackedScene" path="res://scenes/ui/debug_overlay.tscn" id="6"]
 [ext_resource type="PackedScene" path="res://scenes/ui/chat_ui.tscn" id="7"]
 [ext_resource type="Script" uid="uid://bak3cur4wfk1h" path="res://scripts/ui/overhead_source.gd" id="8"]
-[ext_resource type="PackedScene" path="res://scenes/player/humanoid_visual.tscn" id="9"]
+[ext_resource type="PackedScene" path="res://scenes/actors/humanoid_visual.tscn" id="9"]
 
 [sub_resource type="RectangleShape2D" id="1"]
 size = Vector2(12, 10)

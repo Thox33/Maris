@@ -1,7 +1,7 @@
 extends Node
 
 const PLAYER_SCENE := preload("res://scenes/player/player.tscn")
-const CHARACTER_APPEARANCE := preload("res://scripts/player/character_appearance.gd")
+const CHARACTER_APPEARANCE := preload("res://scripts/actor/character_appearance.gd")
 const SPAWN_TILE := Vector2i(0, 4)
 
 var world: Node2D
@@ -53,7 +53,16 @@ func create_player(data: Dictionary) -> Node:
 	player.set_multiplayer_authority(data["peer_id"])
 	player.add_to_group("players")
 	if player.has_method("setup_session"):
-		player.setup_session(world, inventory_manager, items_node, use_authority_service)
+		player.setup_session(
+			inventory_manager,
+			items_node,
+			players_node,
+			world.terrain_layer,
+			world.chunk_manager,
+			world.structure_manager,
+			use_authority_service,
+			world.chunk_debug_overlay
+		)
 	player.apply_character_data(String(data.get("character_name", "")), appearance)
 	return player
 

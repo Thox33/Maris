@@ -5,364 +5,181 @@ See also:
 - [`../index.md`](../index.md)
 - [`../architecture/overview.md`](../architecture/overview.md)
 
-Stand: 2026-04-03
+Status: core HUD and host-authoritative interaction loop implemented by 2026-04-10
 
-## Ziel
+## Goal
 
-Das Inventar soll sich visuell von der permanent sichtbaren Hotbar nach oben ausklappen.
-Die Hotbar bleibt also immer sichtbar, und das restliche Inventar erscheint beim Oeffnen darueber.
+The inventory should behave like an expanded hotbar rather than a separate full-screen inventory mode.
 
-Das Verhalten soll eher in Richtung Core Keeper gehen als in Richtung Minecraft:
+Current design goals remain:
 
-- Hotbar immer unten sichtbar
-- Inventar erweitert die Hotbar nach oben
-- kein separater "Inventar-Modus", der die ganze Spielwelt blockiert
-- Maus bleibt immer sichtbar
-- Weltinteraktion soll auch bei offenem Inventar weiter funktionieren
+- hotbar always visible
+- inventory expands upward above the hotbar
+- no global inventory mode that pauses the world
+- mouse stays visible
+- world interaction should continue while the inventory is open, except when the cursor is actually over blocking UI
 
-Crafting ist noch nicht Teil dieser Phase. Das Inventar soll aber spaeter so erweiterbar sein, dass ein Terraria-artiges Rezeptpanel daneben oder daran andocken kann.
+Crafting is still out of scope for this document, but the current HUD should remain extensible enough for later chest and crafting panels.
 
-## Ausgangslage im Projekt
+## Current Implemented Shape
 
-Die Datenbasis ist bereits passend aufgebaut:
+The data model is already shared:
 
-- ein gemeinsames `Inventory` mit `40` Slots
-- die ersten `10` Slots sind die Hotbar
-- Hotbar und Hauptinventar sind also bereits nur zwei Ansichten derselben Daten
-- `InventoryManager` ist host-authoritative und synchronisiert die Slotdaten an den Client
+- one `Inventory` with `40` slots
+- the first `10` slots are the hotbar
+- hotbar and main inventory are just two views over the same underlying data
+- inventory state remains host-authoritative
 
-Das ist eine gute Grundlage fuer das geplante UI, weil keine getrennten Datenstrukturen fuer Hotbar und Inventar noetig sind.
-
-## Zielbild der UI
-
-Geschlossen:
+Current HUD layout:
 
 ```text
-[ 0 ][ 1 ][ 2 ][ 3 ][ 4 ][ 5 ][ 6 ][ 7 ][ 8 ][ 9 ]
+closed
+  [ 0 ][ 1 ][ 2 ][ 3 ][ 4 ][ 5 ][ 6 ][ 7 ][ 8 ][ 9 ]
+
+open
+  [30][31][32][33][34][35][36][37][38][39]
+  [20][21][22][23][24][25][26][27][28][29]
+  [10][11][12][13][14][15][16][17][18][19]
+  [ 0 ][ 1 ][ 2 ][ 3 ][ 4 ][ 5 ][ 6 ][ 7 ][ 8 ][ 9 ]
 ```
 
-Geoeffnet:
+The hotbar stays anchored at the bottom. Opening the inventory currently shows or hides the upper inventory panel; there is not yet a dedicated open/close tween.
+
+## Current UI Structure
+
+The active HUD lives in the player's `HotbarUI` `CanvasLayer`.
+
+Current node shape:
 
 ```text
-[30][31][32][33][34][35][36][37][38][39]
-[20][21][22][23][24][25][26][27][28][29]
-[10][11][12][13][14][15][16][17][18][19]
-[ 0 ][ 1 ][ 2 ][ 3 ][ 4 ][ 5 ][ 6 ][ 7 ][ 8 ][ 9 ]
+HotbarUI
+  Root
+    BottomDock
+      Stack
+        InventoryPanel
+          BodyPadding
+            BodyGrid
+        HotbarPanel
+          HotbarPadding
+            HotbarRow
 ```
 
-Wichtig:
+Slots are created dynamically in code rather than instanced from a separate scene.
 
-- Die Hotbar bleibt an derselben Position.
-- Das Inventar klappt nur nach oben auf und wieder nach unten zu.
-- Es gibt keine zweite, getrennte Hotbar-Logik.
+## Current Input Model
 
-## Bedienmodell
+Implemented controls:
 
-### Allgemein
+- `E` toggles the inventory panel
+- `1` through `0` select hotbar slots
+- mouse wheel cycles hotbar slots
+- left click performs full pickup / full place behavior
+- right click performs `pickup_half` or `place_one`
+- `Shift` + left click performs `quick_transfer`
+- left-drag with a held stack distributes items evenly across eligible slots
 
-- Die Maus bleibt immer sichtbar.
-- Das Inventar darf die Welt nicht global sperren.
-- Linksklick auf Bloecke soll weiterhin funktionieren, auch wenn das Inventar offen ist.
-- Wenn direkt auf ein Inventar-Element geklickt wird, darf die Welt dahinter nicht mitreagieren.
+Important correction:
 
-### Konsequenz fuer Input
+- `Tab` is not currently bound as an inventory toggle in the project input map
 
-Das UI darf nur dort Eingaben abfangen, wo es tatsaechlich sichtbar und anklickbar ist.
-Unsichtbare oder vollflaechige Overlay-Controls duerfen nicht versehentlich die Welt blockieren.
+## Current World-Interaction Contract
 
-Praktisch bedeutet das:
+The inventory does not globally block gameplay input.
 
-- Klick neben das Inventar: Event geht an die Welt
-- Klick auf Slot oder Inventarflaeche: Event bleibt im UI
-- Hotbar bleibt immer bedienbar
-- Welt bleibt auch bei offenem Inventar aktiv
+Current implementation:
 
-### Zusaetzlicher Input-Vertrag mit der Welt
+- interactive inventory controls are added to a `world_input_blocking_ui` group
+- `BlockInteraction` checks `gui_get_hovered_control()` and walks parents for that group
+- if the mouse is over blocking inventory UI, world interaction is suppressed
+- if the mouse is not over blocking inventory UI, world interaction continues normally
 
-Fuer dieses Projekt ist wichtig:
+This means:
 
-- `mouse_filter = STOP` auf UI-Controls ist notwendig, aber nicht allein ausreichend
-- die aktuelle Weltinteraktion liest Mausaktionen nicht nur ueber GUI-Events, sondern auch ueber Gameplay-Input
-- deshalb braucht es zusaetzlich einen klaren Vertrag zwischen Inventar-UI und Weltinteraktion
+- clicks on real inventory widgets stay in the UI
+- empty space outside the inventory remains usable for the world
+- open inventory does not automatically pause or globally lock world interaction
 
-Das bedeutet fuer die spaetere Umsetzung:
-
-- das Inventar meldet explizit, wenn eine Mausaktion auf einem echten Inventar-Element begonnen hat
-- `BlockInteraction` respektiert diesen Zustand und fuehrt fuer diesen Klick keine Weltaktion aus
-- freie Bereiche ausserhalb des Inventars bleiben weiterhin voll fuer die Welt klickbar
-
-Damit ist klar:
-
-- Mouse-Filter loesen die Hit-Detection im UI
-- die Gameplay-Schicht entscheidet zusaetzlich, ob Weltinteraktion fuer genau diesen Klick unterdrueckt wird
-
-## Empfohlene Godot-Struktur
-
-Die komplette Darstellung sollte als HUD in einer `CanvasLayer` liegen.
-
-Fuer die Layer-Konvention des Projekts gilt dabei:
-
-- `110` fuer die permanent sichtbare Hotbar als HUD
-- `120` fuer aufklappende Fenster- oder Inventarbereiche
-
-Fuer eine erste pragmatische Version darf das Inventar noch in einer gemeinsamen HUD-Struktur gebaut werden.
-Spaetestens wenn weitere Fenster wie Crafting oder Chests dazukommen, sollte die Trennung zwischen permanentem HUD und geoeffnetem Inventarbereich klar gezogen werden.
-
-Vorgeschlagene Hierarchie:
-
-```text
-Player
-└── InventoryHud (CanvasLayer)
-    └── Root (Control, fullscreen, mouse_filter = IGNORE)
-        └── BottomDock (MarginContainer)
-            └── Stack (VBoxContainer)
-                ├── InventoryReveal (Control, clip_contents = true)
-                │   └── InventoryBody (PanelContainer)
-                │       └── BodyPadding (MarginContainer)
-                │           └── BodyGrid (GridContainer, columns = 10)
-                └── HotbarPanel (PanelContainer)
-                    └── HotbarPadding (MarginContainer)
-                        └── HotbarRow (GridContainer oder HBoxContainer)
-```
-
-Dazu eine wiederverwendbare Slot-Szene:
-
-```text
-InventorySlot
-├── Icon
-├── CountLabel
-├── HotkeyLabel
-└── SelectionFrame
-```
-
-## Warum diese Struktur
-
-### Ein gemeinsames Slot-Widget
-
-Hotbar und Hauptinventar sollten denselben Slot-Typ verwenden.
-So bleiben Darstellung, Hover, Klicks, Stapelanzeige und spaeter Drag-and-Drop konsistent.
-
-### Inventar nur als zusaetzliche Darstellung
-
-Das eigentliche Inventar bleibt das bereits vorhandene Datenmodell.
-Die UI zeigt nur:
-
-- `0..9` als Hotbar
-- `10..39` als zusaetzliche Reihen im geoeffneten Zustand
-
-### Ausgewaehlter Hotbar-Slot ist kein Inventardatum
-
-Wichtig fuer die Architektur:
-
-- der aktuell ausgewaehlte Hotbar-Slot ist Benutzer- bzw. Gameplay-Zustand
-- er ist nicht Teil der `Inventory`-Slotdaten
-- das Inventar speichert also Inhalte, nicht die aktuelle Auswahl
-
-Damit bleiben sauber getrennt:
-
-- `Inventory`: Welche Items liegen in welchen Slots
-- Player/Gameplay: Welcher Hotbar-Slot ist aktuell aktiv
-- UI: Wie diese Information dargestellt und bedient wird
-
-### Aufklappen ueber Hoehe statt ueber komplettes Umschalten
-
-Der Bereich oberhalb der Hotbar sollte in einem Wrapper mit `clip_contents = true` liegen.
-Beim Oeffnen wird nur die sichtbare Hoehe dieses Bereichs erweitert.
-So entsteht der Eindruck, dass das Inventar aus der Hotbar nach oben herauswaechst.
-
-## Input- und Mouse-Filter-Regeln
-
-Das ist der wichtigste Punkt fuer das gewuenschte Verhalten.
-
-### Root
-
-Der fullscreen `Root` sollte `mouse_filter = IGNORE` haben.
-Dadurch blockiert er nie pauschal die Welt.
-
-### Interaktive Inventarbereiche
-
-Diese Controls sollten Mausereignisse aktiv abfangen:
-
-- `InventoryBody`
-- `HotbarPanel`
-- `InventorySlot`
-
-Hier sollte `mouse_filter = STOP` verwendet werden.
-
-### Reine Anzeigeelemente
-
-Diese Controls sollten Mausereignisse nicht selbst behandeln:
-
-- `Icon`
-- `CountLabel`
-- `HotkeyLabel`
-- rein dekorative Rahmen oder Hintergruende
-
-Hier sollte `mouse_filter = IGNORE` verwendet werden.
-
-### Ergebnis
-
-- Die GUI verarbeitet Klicks zuerst, aber nur auf echten UI-Treffern.
-- Freie Bereiche bleiben fuer die Welt offen.
-- Dadurch koennen Bloecke trotz offenem Inventar normal angeklickt werden.
-
-## UI-Zustaende
-
-Es reichen vier einfache Zustaende:
-
-- `closed`
-- `opening`
-- `open`
-- `closing`
-
-Regeln:
-
-- `closed`: nur Hotbar sichtbar
-- `open`: Hotbar plus drei Inventarreihen sichtbar
-- `opening` und `closing`: Zwischenzustand fuer Tween/Animation
-- waehrend eines laufenden Toggles keine zweite Toggle-Aktion starten
-
-## Animation
-
-Empfohlen ist eine einfache Tween-Animation.
-
-Nicht empfohlen:
-
-- starre AnimationPlayer-Loesung fuer viele Layoutwerte
-- vollstaendiges Ein- und Ausblenden des ganzen HUDs
-
-Empfohlen:
-
-- `InventoryReveal` behaelt seine Breite
-- nur die Hoehe wird animiert
-- optional zusaetzlich leichtes Fade oder kleiner Offset
-- Hotbar bleibt visuell stabil stehen
-
-Damit bleibt das Verhalten robust, auch wenn sich spaeter Slotgroessen oder Padding aendern.
-
-## Bedienung fuer die erste Inventarversion
-
-Geplante Aktionen:
-
-- `E` oder `Tab`: Inventar oeffnen oder schliessen
-- `1-0`: Hotbar-Slot auswaehlen
-- Mausrad: Hotbar-Slot wechseln
-- Linksklick auf Slot: aufnehmen, ablegen, tauschen oder zusammenfuehren
-- Rechtsklick auf Slot: splitten oder einzelne Items ablegen
-- `Shift` + Klick: Schnelltransfer zwischen Hotbar und Hauptinventar
-
-Wichtig:
-
-- Offenes Inventar bedeutet nicht, dass Gameplay pausiert wird.
-- Es ist nur eine erweiterte Sicht auf dieselben Slots.
-
-## Verantwortung der Systeme
+## Current Authority Split
 
 ### Inventory
 
-Bleibt reine Datenklasse:
+`Inventory` remains a pure data container:
 
-- Slotinhalte
-- Stapelgroessen
-- Slotzugriff
-- spaeter auch Move/Split/Swap-Helfer
-- kein Wissen ueber aktuell ausgewaehlten Slot
-- kein Wissen ueber Maus, Cursor oder UI-Zustaende
+- slot contents
+- stack counts
+- add / remove / set / serialize behavior
+
+It does not know about:
+
+- UI state
+- selected hotbar slot
+- networking
+- cursor previews
 
 ### InventoryManager
 
-Bleibt Netzwerk- und Autoritaetsschicht:
+`InventoryManager` is now the RPC bridge and local client sync surface.
 
-- host-authoritative Aenderungen
-- Full Sync beim Join
-- Delta Sync bei Slot-Aenderungen
-- Inventar-Intents vom Client validieren
-- serverseitige `move`, `swap`, `merge`, `split`, `quick_transfer`-Operationen anbieten
-- Client sendet keine direkten Slot-Mutationen, sondern nur erlaubte Aktionen
+It owns:
 
-### InventoryHud
+- full inventory sync to clients
+- slot delta sync to clients
+- held cursor-slot sync to clients
+- RPC entrypoints for placement and inventory actions
 
-Bleibt reine Darstellungs- und Interaktionsschicht:
+### InventoryAuthorityService
 
-- Slots erzeugen
-- Slotdaten anzeigen
-- Toggle-Zustand verwalten
-- Klicks an die Inventarlogik weiterreichen
-- UI-Treffer eindeutig erkennen und an die Gameplay-Schicht rueckmelden
-- Cursor-Stack bzw. gehaltenen Slot nur als Interaktionszustand fuehren, nicht als persistentes Inventardatum
+`InventoryAuthorityService` owns the canonical host-side inventory rules and state.
 
-## Vorschlag fuer spaetere Erweiterungen
+That includes:
 
-Noch nicht jetzt umsetzen, aber beim Design mitdenken:
+- authoritative player inventories
+- authoritative held cursor-slot state
+- server-side processing of inventory actions
 
-- Tooltip fuer Itemnamen
-- Drag-and-Drop mit nativen `Control`-Hooks
-- Chests als zweite `Inventory`-Instanz im selben UI-Konzept
-- spaeteres Crafting-Panel eher nach Terraria-Art als Rezeptliste statt Minecraft-3x3
+### WorldPlacementService
 
-## Empfohlene Umsetzungsreihenfolge
+`WorldPlacementService` owns host-side placement validation against:
 
-### Phase 1
+- world occupancy
+- structure occupancy
+- item placement rules
 
-- bestehende Hotbar-UI zu einer gemeinsamen `InventoryHud` umbauen
-- Slot-Widget vereinheitlichen
-- BodyGrid fuer Slots `10..39` ergaenzen
-- Oeffnen/Schliessen visuell umsetzen
-- noch keine neue Inventarmutation einfuehren
+## Current Interaction Features
 
-### Phase 2
+Already implemented:
 
-- Input-Vertrag zwischen UI und `BlockInteraction` festziehen
-- sicherstellen, dass UI-Treffer keine Weltaktionen ausloesen
-- sicherstellen, dass freie Bereiche trotz offenem Inventar weiter an die Welt gehen
-- Cursor-Stack und Interaktionsregeln fachlich definieren
+- full inventory sync on join
+- per-slot delta sync
+- host-authoritative cursor-held slot
+- quick transfer
+- full pickup / full place
+- half pickup / place one
+- drag distribution preview and commit
+- held-slot preview that follows the mouse
 
-### Phase 3
+Current visual limitation:
 
-- primitive Inventar-Aktionen fachlich festlegen
-- z. B. `pickup_full`, `place_full`, `place_one`, `swap`, `merge`, `quick_transfer`
-- serverseitige Operationen in `Inventory` und `InventoryManager` vorbereiten
-- noch keine rein lokale Dauer-Loesung bauen, die spaeter wieder ersetzt werden muss
+- opening / closing is a visibility toggle, not a polished animated reveal yet
 
-### Phase 4
+## Remaining Follow-Ups
 
-- host-authoritative Inventar-Aktionen fuer Move/Swap/Split einbauen
-- Client-Intents statt direkter lokaler Manipulation
-- Multiplayer-Sync fuer UI-Interaktionen sauber abschliessen
+Still reasonable future work:
 
-### Phase 5
+- add a proper reveal animation for opening / closing
+- add tooltips
+- add chest / secondary inventory support
+- add crafting-panel integration
+- decide later whether to migrate parts of the interaction to native `Control` drag-and-drop hooks
 
-- Quick-transfer
-- Tooltips
-- Drag-and-Drop
-- spaeter Crafting-Erweiterung
+## Decision Summary
 
-## Designentscheidung
+The project currently follows one shared-inventory model:
 
-Die wichtigste Entscheidung fuer dieses System lautet:
+- exactly one player inventory
+- hotbar as a permanent sub-view of that inventory
+- inventory expanding above the hotbar
+- UI only blocking world input where the cursor is actually over blocking controls
+- inventory mutations staying host-authoritative
 
-Es gibt genau ein Spielerinventar mit einer Hotbar als Unterbereich.
-
-Nicht:
-
-- getrennte Inventar- und Hotbar-Daten
-- globalen Inventarmodus
-- globales Blockieren der Welt bei offenem Inventar
-
-Sondern:
-
-- ein gemeinsames Inventar
-- Hotbar permanent sichtbar
-- Inventar klappt darueber auf
-- UI blockiert nur dort, wo wirklich UI angeklickt wird
-- Weltinteraktion respektiert diese UI-Treffer explizit
-- Inventar-Aenderungen bleiben host-authoritative
-
-## Ergebnis
-
-Dieses Modell passt gut zur bestehenden Architektur des Projekts und ermoeglicht:
-
-- Core-Keeper-artige Darstellung
-- staendiges Weiterinteragieren mit der Welt
-- spaetere Erweiterung um Chests und Crafting
-- klare Trennung von Daten, Netzwerk und UI
+That model is already implemented and should remain the baseline for future chest and crafting extensions.

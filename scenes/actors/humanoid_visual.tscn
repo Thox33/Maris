@@ -1,0 +1,16 @@
+[gd_scene format=3 uid="uid://bst0yh5ktjqcq"]
+
+[ext_resource type="Script" path="res://scenes/actors/humanoid_visual.gd" id="1_humanoid_visual"]
+[ext_resource type="Resource" uid="uid://dq8h3bvxk4mn2" path="res://assets/resources/characters/humanoid_v1_profile.tres" id="2_profile"]
+
+[node name="HumanoidVisual" type="Node2D" unique_id=1138602591]
+script = ExtResource("1_humanoid_visual")
+visual_profile = ExtResource("2_profile")
+
+[node name="Body" type="AnimatedSprite2D" parent="." unique_id=1246326878]
+
+[node name="Hair" type="AnimatedSprite2D" parent="." unique_id=779745754]
+
+[node name="Face" type="Sprite2D" parent="." unique_id=2059815087]
+
+[node name="HeldItemAnchor" type="Node2D" parent="." unique_id=443801253]

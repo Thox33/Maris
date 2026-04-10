@@ -1,33 +1,33 @@
 class_name HumanoidVisualProfile
-extends RefCounted
+extends Resource
 
 const ANIM_IDLE := "idle"
 const ANIM_RUN := "run"
 
-var body_idle_path: String = ""
-var body_run_path: String = ""
-var frame_width: int = 16
-var frame_height: int = 24
-var animation_layouts: Dictionary = {}
-var held_item_offsets: Dictionary = {}
-var held_item_rotation_offsets_deg: Dictionary = {}
-var held_item_base_rotation_deg: float = 0.0
-var held_tool_base_rotation_deg: float = 0.0
+@export var body_idle_path: String = ""
+@export var body_run_path: String = ""
+@export var frame_width: int = 16
+@export var frame_height: int = 24
+@export var animation_layouts: Dictionary = {}
+@export var held_item_offsets: Dictionary = {}
+@export var held_item_rotation_offsets_deg: Dictionary = {}
+@export var held_item_base_rotation_deg: float = 0.0
+@export var held_tool_base_rotation_deg: float = 0.0
 
 # Face layer: chin anchor position per animation frame (offset from sprite center)
-var face_offsets: Dictionary = {}
+@export var face_offsets: Dictionary = {}
 # Eye spritesheet: 9 frames (neutral + 8 directions), each eye_frame_width x eye_frame_height
-var eye_path: String = ""
-var eye_frame_width: int = 9
-var eye_frame_height: int = 3
+@export var eye_path: String = ""
+@export var eye_frame_width: int = 9
+@export var eye_frame_height: int = 3
 # Eye sprite position relative to chin anchor (negative y = up)
-var eye_local_offset: Vector2 = Vector2(0.0, -4.0)
+@export var eye_local_offset: Vector2 = Vector2(0.0, -4.0)
 # Mouth spritesheet: frames side by side (neutral, happy, frown), each mouth_frame_width x mouth_frame_height
-var mouth_path: String = ""
-var mouth_frame_width: int = 7
-var mouth_frame_height: int = 2
+@export var mouth_path: String = ""
+@export var mouth_frame_width: int = 7
+@export var mouth_frame_height: int = 2
 # Mouth sprite position relative to chin anchor
-var mouth_local_offset: Vector2 = Vector2(0.0, -1.0)
+@export var mouth_local_offset: Vector2 = Vector2(0.0, -1.0)
 
 
 static func create_default_profile() -> HumanoidVisualProfile:

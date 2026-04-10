@@ -8,14 +8,14 @@ const TALL_STRUCTURE_VISUAL_SCENE := preload("res://scenes/world/tall_structure_
 ## Set to false to silence chunk load/unload messages in the console.
 const DEBUG_LOG: bool = false
 
-## Reference to the parent WorldGenerator (set in _ready).
+## Reference to the parent WorldGenerator (set by setup()).
 var world_generator: Node2D
 
 ## Reference to the global TileMapLayer.
 var terrain_layer: TileMapLayer
 var base_visual_layer: TileMapLayer
 
-## PlantLayer mirror — coral tiles are duplicated here for the sway shader.
+## PlantLayer rendering — plant tiles live here for the vegetation sway shader.
 var plant_layer: TileMapLayer
 
 var tall_structure_visuals_node: Node2D
@@ -35,13 +35,20 @@ var _load_queue: Array[Vector2i] = []
 var _unload_queue: Array[Vector2i] = []
 
 
-func _ready() -> void:
-	world_generator = get_parent()
-	terrain_layer = world_generator.get_node("TerrainLayer")
-	base_visual_layer = world_generator.get_node("BaseVisualLayer")
-	plant_layer = world_generator.get_node("PlantLayer")
-	tall_structure_visuals_node = world_generator.get_node("DepthSorted")
-	_players_node = null
+func setup(
+	p_world_generator: Node2D,
+	p_terrain_layer: TileMapLayer,
+	p_base_visual_layer: TileMapLayer,
+	p_plant_layer: TileMapLayer,
+	p_tall_structure_visuals_node: Node2D,
+	p_players_node: Node,
+) -> void:
+	world_generator = p_world_generator
+	terrain_layer = p_terrain_layer
+	base_visual_layer = p_base_visual_layer
+	plant_layer = p_plant_layer
+	tall_structure_visuals_node = p_tall_structure_visuals_node
+	_players_node = p_players_node
 
 
 ## Immediately loads all chunks in LOAD_RADIUS around a world position.
@@ -74,11 +81,8 @@ func _process(delta: float) -> void:
 		return
 	_update_timer = 0.0
 
-	# Lazily find the Players node.
 	if _players_node == null:
-		_players_node = world_generator.get_node_or_null("DepthSorted/Players")
-		if _players_node == null:
-			return
+		return
 
 	var needed_chunks: Dictionary = {}
 	_collect_needed_chunks(needed_chunks)
@@ -354,11 +358,14 @@ func _apply_cell(cell: Vector2i, tile_id: int) -> void:
 
 		if props.plant:
 			plant_layer.set_cell(cell, 0, props.atlas_coord)
+			base_visual_layer.erase_cell(cell)
 		else:
 			plant_layer.erase_cell(cell)
 
 		if props.uses_tall_structure_visual():
 			base_visual_layer.erase_cell(cell)
+			_erase_tall_structure_visual(cell)
+		elif props.plant:
 			_erase_tall_structure_visual(cell)
 		else:
 			base_visual_layer.set_cell(cell, 0, props.atlas_coord)

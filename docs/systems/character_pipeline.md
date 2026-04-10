@@ -8,20 +8,20 @@ See also:
 - [`base_character_art_direction.md`](base_character_art_direction.md)
 - [`../plans/animation_and_character_plan.md`](../plans/animation_and_character_plan.md)
 
-Status: 2026-04-06
+Status: 2026-04-10
 
 ## Goal
 
-This document defines the desired V1 character pipeline for the player character.
+This document describes the currently implemented humanoid player pipeline.
 
 It covers:
 
 - how character data is represented
 - how actor state feeds the visuals
-- how the humanoid visual is layered
-- how facing and animation are selected
+- how the current humanoid visual is layered
+- how facing, mirroring, and locomotion are selected
 
-This is a system document, not a phased plan. It describes the intended structure the codebase should implement.
+This is a system document for the current codebase, not a speculative target doc.
 
 ## Scope
 
@@ -30,8 +30,8 @@ This document applies to the humanoid player character pipeline.
 It does not define:
 
 - fish or enemy-specific visuals
-- full combat behavior
-- equipment paperdoll depth
+- combat-specific action animation logic
+- deep equipment paperdoll layering
 - non-humanoid actor visual layouts
 
 Those actor types should reuse the actor model, but they can provide their own visual implementations.
@@ -40,21 +40,22 @@ Those actor types should reuse the actor model, but they can provide their own v
 
 The player character uses the actor architecture defined in [`../architecture/actor_model.md`](../architecture/actor_model.md).
 
-The relevant chain is:
+The relevant runtime chain is:
 
-- `PlayerActor`
-- `ActorVisual`
+- `Player` (`CharacterBody2D`)
+- actor-facing state exposed by `player.gd`
+- `VisualRoot`
 - `HumanoidVisual`
 
-In practice, that means:
+In practice:
 
-- gameplay state lives on the actor side
-- the visual side reads that state and presents it
-- appearance data configures the humanoid visual
+- gameplay state lives on the player actor side
+- the visual side reads that state and presents it locally
+- appearance data is owned by gameplay / persistence and applied to the visual
 
 ## Ownership Split
 
-### PlayerActor
+### Player Actor
 
 Owns:
 
@@ -62,68 +63,70 @@ Owns:
 - movement physics
 - network authority and remote smoothing
 - character identity such as display name
-- character appearance data as gameplay-owned configuration
+- persistent character appearance data
+- held-item state derived from the selected hotbar slot
 
 Does not own:
 
-- sprite-layer structure
+- sprite-sheet loading
 - animation frame selection details
-- palette application logic beyond supplying appearance values
+- visual anchor placement for face / held item presentation
 
 ### HumanoidVisual
 
 Owns:
 
-- sprite layering
-- direction presentation
-- animation selection
-- mirroring for left-facing side view
-- visual application of appearance data
+- sprite-sheet loading
+- animation playback
+- left/right mirroring
+- face presentation
+- held-item anchor placement and rotation
+- visual application of currently used appearance values
 
 Does not own:
 
 - movement physics
 - networking
-- inventory logic
+- inventory rules
 - block interaction
-- save persistence
+- persistence
 
-## V1 Visual Spec
+## Current Visual Spec
 
 ### Frame Size
 
-The V1 humanoid character uses a `16x24` frame size.
+The current humanoid body sheets use a `16x24` frame size.
 
-Reasons:
-
-- the current `16x16` player sprite is too constrained for the desired chibi silhouette
-- a taller frame allows a larger head and clearer body read
-- the world tile size can remain `16x16` without forcing the character sprite to be exactly one tile tall
+This allows a taller, more readable chibi silhouette while keeping the world tile size at `16x16`.
 
 ### Direction Set
 
-The V1 rendered direction is `side` only.
+The humanoid renderer currently uses a side-view presentation only.
 
-Left-facing presentation is done by mirroring `side` horizontally (`scale.x = -1`).
+- right-facing uses the authored side-view sprites
+- left-facing is presented by mirroring `scale.x`
+- the actor state still exposes `up`, `side`, and `down` for shared actor vocabulary
+- the humanoid player visual does not currently swap to separate up/down sprite sets
 
-Up and down views are not part of V1. This matches the approach used by Terraria and Forager and keeps art production scope manageable for solo development.
+### Current Animation Set
 
-### Body Shape
+The runtime humanoid visual currently plays two looping body animations:
 
-The V1 humanoid body rules are:
+- `idle`
+- `run`
 
-- one body type only
-- chibi proportions
-- slightly oversized head
-- short torso
-- readable arms and legs
-- strong silhouette against underwater backgrounds
+The actor locomotion vocabulary remains:
 
-## V1 Appearance Model
+- `idle`
+- `move`
 
-The humanoid appearance model stores small, stable IDs rather than raw colors or free-form values.
+`HumanoidVisual` maps actor locomotion `move` to the body animation named `run`.
 
-V1 appearance fields:
+## Appearance Model
+
+Character appearance is stored as stable string IDs rather than raw `Color` values.
+
+Current stored fields:
 
 - `skin_tone_id`
 - `hair_style_id`
@@ -131,48 +134,33 @@ V1 appearance fields:
 - `top_color_id`
 - `bottom_color_id`
 
-Important rules:
+These values are persistent character data and are passed into the player actor on spawn.
 
-- these values are part of the character's appearance data
-- they are actor-owned configuration, not visual-only transient state
-- they should be serializable as stable string IDs
-- they should not store engine-specific `Color` values directly in saves
+### Current visual usage
 
-## Color Strategy
+Not every stored field is fully rendered yet.
 
-The V1 color strategy uses silhouette sprites with runtime modulation.
+Current implementation:
 
-The character has three visual layers:
+- `top_color_id` is applied to the body sprite via `modulate`
+- `hair_color_id` is prepared for hair tinting
+- `skin_tone_id`, `hair_style_id`, and `bottom_color_id` are already saved and synchronized, but are not yet fully expressed as separate visual layers
 
-| Layer | Type | Recolored? |
-|-------|------|------------|
-| `Body` | full-body silhouette (torso, arms, legs as one image) | yes — via `modulate` |
-| `Hair` | hair silhouette | yes — via `modulate` |
-| `Face` | detailed pixel art PNG placed on top of body | no |
+This means the persistence model is ahead of the current art depth, which is intentional.
 
-Rules:
+## Current Layering
 
-- `Body` and `Hair` sprites are white silhouettes on transparent backgrounds
-- color is applied at runtime via `AnimatedSprite2D.modulate`
-- each appearance field (`body_color_id`, `hair_color_id`) stores a stable string ID that maps to a predefined `Color`
-- no color is baked into `Body` or `Hair` art — all color variants are free at runtime
-- `Face` carries eyes, expression detail, and shading — it is not modulated
-
-This makes ComfyUI art production straightforward: generate the full body as a clean silhouette, generate hair as a clean silhouette, generate the face as a detailed image. Color customization requires no additional art files.
-
-## Node Structure
-
-The desired V1 player visual structure is:
+The current player visual scene is:
 
 ```text
-PlayerActor
+Player
 |-- CollisionShape2D
 |-- VisualRoot
 |   `-- HumanoidVisual
-|       |-- Body             (AnimatedSprite2D — full-body silhouette, body color modulate)
-|       |-- Hair             (AnimatedSprite2D — hair silhouette, hair color modulate)
-|       |-- Face             (Sprite2D — detailed face PNG, not recolored)
-|       `-- HeldItemAnchor   (Node2D — anchor for a held item sprite)
+|       |-- Body           (AnimatedSprite2D)
+|       |-- Hair           (AnimatedSprite2D, currently hidden)
+|       |-- Face           (Sprite2D, currently hidden)
+|       `-- HeldItemAnchor (Node2D)
 |-- OverheadAnchor
 |-- OverheadSource
 |-- Camera2D
@@ -183,116 +171,115 @@ PlayerActor
 `-- ChatUI
 ```
 
-Important rules:
+Important runtime note:
 
-- `Body` is a full-body sprite — torso, arms, and legs are one image, not separate parts
-- `Body` and `Hair` are white silhouettes — color comes from `modulate`, not from the art
-- `Face` is placed on top of `Body` at the head position, using a fixed offset
-- `VisualRoot` separates gameplay space from visual presentation
-- `HeldItemAnchor` is positioned at the hand area — full equipment logic comes later
-- later clothing layers (e.g. separate top/bottom color) can be added as additional `AnimatedSprite2D` nodes under `HumanoidVisual`
+- the scene still contains `Hair` and `Face` nodes
+- the current implementation hides those nodes and builds the visible face dynamically under a runtime `FaceAnchor`
+- that runtime face uses separate eye and mouth sprite sheets, not a single static face PNG
 
-## V1 Asset Target
+## Current Asset Set
 
-The first humanoid asset target is authored as one fixed base character, side-view only.
-
-V1 rules:
-
-- one body type, one hairstyle, one face
-- no separate limb sprites — the body is one full image
-- `Body` and `Hair` are white silhouettes on transparent backgrounds
-- `Face` is a separate detailed PNG placed on top of the body
-
-Spritesheet format:
-
-- `Body` and `Hair`: 4 frames horizontal — `idle_1 | idle_2 | walk_1 | walk_2`
-- frame size: `16x24` per frame
-- `Face`: 1–2 frames (neutral, optional blink), used as static `Sprite2D` for V1
-
-Asset naming target:
+The default humanoid profile currently loads:
 
 ```text
 assets/sprites/characters/humanoid_v1/
-  body.png       (4-frame spritesheet, silhouette — whole body)
-  hair_01.png    (4-frame spritesheet, silhouette — one hairstyle)
-  face_01.png    (1–2 frames, detailed pixel art)
+  body_idle_side.png
+  body_run_side.png
+  faces/
+    eyes_directions.png
+    mouth_expressions.png
 ```
 
-This is three files for a complete animated character. Color variants require no additional art. Later additions (e.g. separate clothing layers, alternate hairstyles) follow the same pattern.
+Current runtime behavior:
+
+- body animation sheets are loaded into `SpriteFrames`
+- the eye sheet contains directional eye frames
+- the mouth sheet currently provides a simple static mouth region
+- `Hair` exists as a reserved layer but is not yet backed by an active runtime sheet in the default profile
 
 ## Actor-To-Visual Contract
 
-The visual layer should be able to render correctly from a small shared contract.
+`HumanoidVisual` renders from a small actor-facing contract:
 
-The humanoid visual should read:
+- `locomotion_state`
+- `side_view_mirrored`
+- `held_item_id`
+- appearance data
+- look direction for the face
+
+The player actor also exposes:
 
 - `velocity`
 - `facing`
-- `locomotion_state`
-- optional `active_action`
-- appearance data
-- whether the side view should be mirrored
+- `active_action`
 
-This contract should stay small and generic enough that other actor visuals can use the same pattern.
+Those values are part of the broader actor vocabulary even when the current humanoid visual does not yet consume every one of them for sprite selection.
 
 ## Facing Rules
 
-V1 uses a single facing direction: `side`.
+The player actor derives facing from real velocity, not raw input.
 
-Rules:
+Current actor behavior:
 
-- the character always uses the `side` sprite
-- left-facing is presented by mirroring `side` horizontally (`scale.x = -1`)
-- facing direction is derived from horizontal velocity sign, not from raw input
-- when movement is near zero, keep the last known facing direction
+- strong horizontal motion selects `side`
+- strong vertical motion can select `up` or `down`
+- when using side view, `side_view_mirrored` stores whether the sprite should be flipped for left-facing presentation
+
+Current humanoid visual behavior:
+
+- body animation selection only uses locomotion and side mirroring
+- no separate up/down humanoid sprite set is currently rendered
 
 ## Locomotion Rules
 
-The V1 locomotion states are:
-
-- `idle`
-- `move`
-
-These are derived from real velocity with a deadzone.
+Locomotion is derived from real velocity with a deadzone.
 
 Rules:
 
-- if the speed is below the movement deadzone, use `idle`
-- if the speed is above the movement deadzone, use `move`
-- do not switch directly from raw input because that causes incorrect remote animation and visual flicker
+- below deadzone: `idle`
+- above deadzone: `move`
+- remote animation should be driven from replicated motion, not raw input
 
-The exact deadzone constant can be tuned in code, but the system rule is fixed: locomotion comes from physical motion.
+This keeps local and remote presentation consistent.
 
-## Animation Rules
+## Face And Look Direction
 
-The V1 animation set is two animations per sprite:
+The current face layer is driven by look direction:
 
-- `idle` — 2 frames, looping, subtle bob
-- `walk` — 2 frames, looping, weight shift
+- the local authority updates look direction from mouse position relative to the player
+- that direction is replicated to remote peers alongside movement snapshots
+- `HumanoidVisual` maps that direction to an eye-frame index
 
-Later actions can extend this with:
+The face is intentionally lightweight:
 
-- `use`
-- `attack`
-- `hurt`
-- `dead`
+- eye direction is dynamic
+- the mouth is currently simple and mostly static
+- the static `Face` scene node is not the active presentation path
 
-Selection order:
+## Held Item Presentation
 
-- high-priority action states override base locomotion when active
-- otherwise play `idle` or `walk` based on `locomotion_state`
+Held-item visuals are part of the humanoid pipeline already.
+
+Current behavior:
+
+- the actor resolves `held_item_id` from the selected hotbar slot
+- `HumanoidVisual` creates a held-item sprite under `HeldItemAnchor`
+- anchor position and rotation are driven by `HumanoidVisualProfile`
+- item-specific hold scale and grip point come from `ItemProperties`
+
+This is a visual-only layer. Inventory authority remains outside the player visual.
 
 ## Networking Rule
 
 Animation frames are not synchronized over the network.
 
-The network synchronizes gameplay-relevant state, and each client derives animation locally from actor state.
+The network synchronizes gameplay-facing state, and each peer derives animation locally from actor state and look direction.
 
-This is required for:
+This keeps:
 
-- clean remote interpolation
-- low network overhead
-- visual consistency with the actor model
+- network overhead low
+- remote interpolation clean
+- the actor model consistent
 
 ## Persistence Rule
 
@@ -301,33 +288,31 @@ Character appearance is persistent character data.
 That means:
 
 - it belongs in the character record, not in transient visual-only state
-- the save should contain appearance IDs
-- spawn/setup code should pass that appearance data into the player actor on creation
+- the save contains appearance IDs
+- spawn/setup code passes appearance data into the player actor on creation
 
-## V1 Non-Goals
+## Current Gaps
 
-These are explicitly out of scope for the first humanoid pipeline:
+The current pipeline is functional but intentionally incomplete.
 
-- multiple body types
-- separate per-limb sprites (arms, legs as individual nodes)
-- deep paperdoll equipment layering
-- up and down view directions
-- free-form per-pixel recoloring
-- creature visuals sharing the same layered sprite layout as the player
+Known follow-ups:
+
+- make use of `skin_tone_id` in a visible layer
+- make use of `bottom_color_id` in a visible layer
+- activate hair-style-specific rendering instead of a hidden placeholder node
+- add action-state animation overrides later if gameplay requires them
 
 ## Decision Summary
 
-The V1 character pipeline is defined as:
+The current humanoid pipeline is:
 
 - actor-owned gameplay state
 - actor-owned persistent appearance IDs
-- three visual layers: `Body` (full-body silhouette), `Hair` (silhouette), `Face` (detailed PNG)
-- `16x24` frame size
-- side-view only with mirrored side-left presentation
-- color customization via `AnimatedSprite2D.modulate` on `Body` and `Hair`
-- `idle` and `walk` animations, 2 frames each
-- one `HeldItemAnchor` node at the hand position
-- velocity-derived locomotion and facing
-- art produced via ComfyUI pipeline (same pipeline used later for world structures)
+- `16x24` side-view body animation sheets
+- local animation selection from locomotion state
+- mirrored left-facing side view
+- dynamic face presentation from eye / mouth sheets
+- one `HeldItemAnchor` node for held-item visuals
+- no network-synchronized animation frames
 
-This keeps the player character specific where it should be, while preserving reuse at the actor-model level and staying within solo-developer production scope.
+This keeps the player character specific where it should be while preserving reuse at the actor-model level.

@@ -9,7 +9,7 @@
 - Procedural chunk-based world generation
 - Block breaking and placing
 - Inventory, hotbar, and item pickup/drop loop
-- Underwater fullscreen effect and coral sway shader
+- Underwater fullscreen effect and vegetation sway shader
 
 ## Core Tech
 

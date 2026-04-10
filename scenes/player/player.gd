@@ -1,80 +1,87 @@
-extends CharacterBody2D
+extends HumanoidActor
 ## Player controller with swim physics.
 ## Only the owning peer processes input. Remote peers are rendered from a
 ## short snapshot buffer for smoother movement.
-
-signal actor_state_changed
-
-const ACTOR_STATE := preload("res://scripts/actor/actor_state.gd")
-const CHARACTER_APPEARANCE := preload("res://scripts/player/character_appearance.gd")
-const ITEM_PROPERTIES := preload("res://scripts/items/item_properties.gd")
-const ACTOR_MOVE_DEADZONE: float = 4.0
 
 @export var swim_speed: float = GameConstants.SWIM_SPEED
 @export var swim_acceleration: float = GameConstants.SWIM_ACCELERATION
 @export var swim_friction: float = GameConstants.SWIM_FRICTION
 
 var _chunk_manager: Node
+var _terrain_layer: TileMapLayer
+var _structure_manager: Node
+var _items_node: Node
+var _players_node: Node
+var _chunk_debug_overlay: Node
+var _use_authority_service: Node
 var _sync_timer: float = 0.0
 var _state_buffer: Array[Dictionary] = []
 @onready var _overhead_source: OverheadSource = $OverheadSource
-@onready var _humanoid_visual: HumanoidVisual = $VisualRoot/HumanoidVisual
 @onready var _block_interaction: Node = $BlockInteraction
+@onready var _hotbar_ui: CanvasLayer = $HotbarUI
+@onready var _debug_overlay: CanvasLayer = $DebugOverlay
+@onready var _camera: Camera2D = $Camera2D
 
-var _character_name: String = ""
-var _appearance: Dictionary = CHARACTER_APPEARANCE.create_default_appearance()
-var _facing: String = ACTOR_STATE.FACING_DOWN
-var _locomotion_state: String = ACTOR_STATE.LOCOMOTION_IDLE
-var _active_action: String = ACTOR_STATE.ACTION_NONE
-var _side_view_mirrored: bool = false
-var _held_item_id: int = ITEM_PROPERTIES.NONE
 var _look_dir: Vector2 = Vector2.RIGHT
 var _inventory_manager: Node
 
 
 func setup_session(
-	world: Node2D, inventory_manager: Node, items_node: Node = null, use_authority_service: Node = null
+	inventory_manager: Node,
+	items_node: Node,
+	players_node: Node,
+	terrain_layer: TileMapLayer,
+	chunk_manager: Node,
+	structure_manager: Node,
+	use_authority_service: Node,
+	chunk_debug_overlay: Node = null,
 ) -> void:
 	_inventory_manager = inventory_manager
-	if world != null:
-		_chunk_manager = world.get_node_or_null("ChunkManager")
-		var block_interaction := get_node_or_null("BlockInteraction")
-		if block_interaction != null and block_interaction.has_method("setup_session"):
-			block_interaction.setup_session(
-				world.get_node_or_null("TerrainLayer"),
-				world.get_node_or_null("ChunkManager"),
-				world.get_node_or_null("StructureManager"),
-				inventory_manager,
-				use_authority_service
-			)
-	var hotbar_ui := get_node_or_null("HotbarUI")
-	var block_interaction_node := get_node_or_null("BlockInteraction")
-	if hotbar_ui != null and hotbar_ui.has_method("setup_session"):
-		hotbar_ui.setup_session(block_interaction_node, inventory_manager)
-	if _humanoid_visual != null and _humanoid_visual.has_method("set_inventory_manager"):
-		_humanoid_visual.set_inventory_manager(inventory_manager)
-	var debug_overlay := get_node_or_null("DebugOverlay")
-	if debug_overlay != null and debug_overlay.has_method("setup_session"):
-		debug_overlay.setup_session(
-			world,
-			items_node,
-			world.get_node_or_null("DepthSorted/Players") if world != null else null,
-			world.get_node_or_null("ChunkDebugCanvas/ChunkDebugOverlay") if world != null else null
-		)
+	_items_node = items_node
+	_players_node = players_node
+	_terrain_layer = terrain_layer
+	_chunk_manager = chunk_manager
+	_structure_manager = structure_manager
+	_use_authority_service = use_authority_service
+	_chunk_debug_overlay = chunk_debug_overlay
+	if is_node_ready():
+		_wire_session_dependencies()
 
 
 func _ready() -> void:
-	$Camera2D.enabled = is_multiplayer_authority()
+	super._ready()
+	_camera.enabled = is_multiplayer_authority()
+	_wire_session_dependencies()
 
 	if not is_multiplayer_authority():
 		_push_remote_state(position, Vector2.ZERO)
 
 	NetworkManager.player_identity_updated.connect(_on_player_identity_updated)
-	if _humanoid_visual != null:
-		_humanoid_visual.apply_appearance(_appearance)
 	_refresh_equipped_item_state()
 	_update_actor_motion_state(velocity)
 	_refresh_overhead()
+
+
+func _wire_session_dependencies() -> void:
+	if _block_interaction != null and _block_interaction.has_method("setup_session"):
+		_block_interaction.setup_session(
+			_terrain_layer,
+			_chunk_manager,
+			_structure_manager,
+			_inventory_manager,
+			_use_authority_service
+		)
+	if _hotbar_ui != null and _hotbar_ui.has_method("setup_session"):
+		_hotbar_ui.setup_session(_block_interaction, _inventory_manager)
+	if _humanoid_visual != null and _humanoid_visual.has_method("set_inventory_manager"):
+		_humanoid_visual.set_inventory_manager(_inventory_manager)
+	if _debug_overlay != null and _debug_overlay.has_method("setup_session"):
+		_debug_overlay.setup_session(
+			_chunk_manager,
+			_items_node,
+			_players_node,
+			_chunk_debug_overlay
+		)
 
 
 func _process(delta: float) -> void:
@@ -233,10 +240,7 @@ func _apply_server_teleport(pos: Vector2) -> void:
 
 func apply_character_data(character_name: String, appearance: Dictionary) -> void:
 	_character_name = character_name.strip_edges()
-	_appearance = CHARACTER_APPEARANCE.normalize_appearance(appearance)
-	if _humanoid_visual != null:
-		_humanoid_visual.apply_appearance(_appearance)
-	actor_state_changed.emit()
+	apply_appearance(appearance)
 	_refresh_overhead()
 
 
@@ -255,16 +259,9 @@ func _refresh_overhead() -> void:
 
 
 func get_actor_state() -> Dictionary:
-	return {
-		"velocity": velocity,
-		"display_name": get_actor_display_name(),
-		"facing": _facing,
-		"locomotion_state": _locomotion_state,
-		"active_action": _active_action,
-		"side_view_mirrored": _side_view_mirrored,
-		"held_item_id": _held_item_id,
-		"appearance": _appearance,
-	}
+	var state := super.get_actor_state()
+	state["velocity"] = velocity
+	return state
 
 
 func get_actor_display_name() -> String:
@@ -277,26 +274,6 @@ func get_actor_display_name() -> String:
 
 func get_actor_look_dir() -> Vector2:
 	return _look_dir
-
-
-func get_actor_facing() -> String:
-	return _facing
-
-
-func get_actor_locomotion_state() -> String:
-	return _locomotion_state
-
-
-func get_actor_active_action() -> String:
-	return _active_action
-
-
-func get_actor_appearance() -> Dictionary:
-	return _appearance.duplicate(true)
-
-
-func is_actor_side_view_mirrored() -> bool:
-	return _side_view_mirrored
 
 
 func _refresh_equipped_item_state() -> void:
@@ -335,35 +312,3 @@ func _sync_held_item_state(item_id: int) -> void:
 	if is_multiplayer_authority():
 		return
 	_apply_remote_held_item_state(item_id)
-
-
-func _update_actor_motion_state(current_velocity: Vector2) -> void:
-	var next_locomotion_state := ACTOR_STATE.LOCOMOTION_IDLE
-	var next_facing := _facing
-	var next_side_view_mirrored := _side_view_mirrored
-	var speed := current_velocity.length()
-
-	if speed >= ACTOR_MOVE_DEADZONE:
-		next_locomotion_state = ACTOR_STATE.LOCOMOTION_MOVE
-		if absf(current_velocity.y) > absf(current_velocity.x):
-			next_facing = (
-				ACTOR_STATE.FACING_UP
-				if current_velocity.y < 0.0
-				else ACTOR_STATE.FACING_DOWN
-			)
-		else:
-			next_facing = ACTOR_STATE.FACING_SIDE
-			if not is_zero_approx(current_velocity.x):
-				next_side_view_mirrored = current_velocity.x < 0.0
-
-	var changed := (
-		next_locomotion_state != _locomotion_state
-		or next_facing != _facing
-		or next_side_view_mirrored != _side_view_mirrored
-	)
-	_locomotion_state = next_locomotion_state
-	_facing = next_facing
-	_side_view_mirrored = next_side_view_mirrored
-
-	if changed:
-		actor_state_changed.emit()

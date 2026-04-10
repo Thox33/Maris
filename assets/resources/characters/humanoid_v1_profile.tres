@@ -1,0 +1,34 @@
+[gd_resource type="Resource" script_class="HumanoidVisualProfile" format=3 uid="uid://dq8h3bvxk4mn2"]
+
+[ext_resource type="Script" path="res://scripts/actor/humanoid_visual_profile.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+body_idle_path = "res://assets/sprites/characters/humanoid_v1/body_idle_side.png"
+body_run_path = "res://assets/sprites/characters/humanoid_v1/body_run_side.png"
+animation_layouts = {
+"idle": {
+"columns": 4,
+"rows": 3,
+"speed": 4.0
+},
+"run": {
+"columns": 8,
+"rows": 1,
+"speed": 10.0
+}
+}
+held_item_offsets = {
+"idle": [Vector2(-2, 5), Vector2(-2, 5), Vector2(-2, 4), Vector2(-2, 4), Vector2(-2, 4), Vector2(-2, 4), Vector2(-2, 4), Vector2(-2, 5), Vector2(-2, 5), Vector2(-2, 5), Vector2(-2, 5), Vector2(-2, 5)],
+"run": [Vector2(-6, 5), Vector2(-5, 5), Vector2(-3, 4), Vector2(-2, 4), Vector2(-1, 5), Vector2(-2, 5), Vector2(-3, 4), Vector2(-4, 4)]
+}
+held_item_rotation_offsets_deg = {
+"idle": [18.0, 18.0, 24.0, 24.0, 24.0, 24.0, 24.0, 18.0, 18.0, 18.0, 18.0, 18.0],
+"run": [80.0, 70.0, 50.0, 30.0, 20.0, 30.0, 50.0, 70.0]
+}
+face_offsets = {
+"idle": [Vector2(1, 2), Vector2(1, 2), Vector2(1, 2), Vector2(1, 1), Vector2(1, 1), Vector2(1, 1), Vector2(1, 1), Vector2(1, 1), Vector2(1, 1), Vector2(1, 2), Vector2(1, 2), Vector2(1, 2)],
+"run": [Vector2(1, 3), Vector2(1, 3), Vector2(1, 2), Vector2(1, 2), Vector2(1, 3), Vector2(1, 3), Vector2(1, 2), Vector2(1, 2)]
+}
+eye_path = "res://assets/sprites/characters/humanoid_v1/faces/eyes_directions.png"
+mouth_path = "res://assets/sprites/characters/humanoid_v1/faces/mouth_expressions.png"

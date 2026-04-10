@@ -82,7 +82,7 @@ var swim_speed_factor: float
 var breakable: bool
 ## Time in seconds to break this tile.
 var hardness: float
-## Whether this tile should be mirrored onto the PlantLayer for sway shader.
+## Whether this tile should be mirrored onto the PlantLayer for the vegetation sway shader.
 var plant: bool
 ## Which tile ID to use for item drop lookup. Defaults to own id.
 ## Coral variants all map to the base coral tile so they drop the same item.

@@ -40,13 +40,13 @@ func _refresh_visual() -> void:
 		for part in _parts:
 			var atlas_coord := part.get("atlas_coord", Vector2i.ZERO) as Vector2i
 			var offset := part.get("offset", Vector2.ZERO) as Vector2
-			var z_index := int(part.get("z_index", 0))
+			var part_z_index := int(part.get("z_index", 0))
 
 			var sprite := Sprite2D.new()
 			sprite.texture = _make_atlas_texture(atlas_coord)
 			sprite.centered = false
 			sprite.position = offset
-			sprite.z_index = z_index
+			sprite.z_index = part_z_index
 			_parts_root.add_child(sprite)
 
 	for child in _static_body.get_children():

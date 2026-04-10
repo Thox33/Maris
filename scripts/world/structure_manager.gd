@@ -14,10 +14,10 @@ var _breakable_cells: Dictionary = {}
 var _structure_visuals: Dictionary = {}
 
 
-func _ready() -> void:
-	world_generator = get_parent()
-	chunk_manager = world_generator.get_node("ChunkManager")
-	depth_sorted_node = world_generator.get_node("DepthSorted")
+func setup(p_world_generator: Node2D, p_chunk_manager: Node, p_depth_sorted_node: Node2D) -> void:
+	world_generator = p_world_generator
+	chunk_manager = p_chunk_manager
+	depth_sorted_node = p_depth_sorted_node
 
 
 func load_from_save() -> void:

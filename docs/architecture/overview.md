@@ -4,29 +4,33 @@ See also:
 
 - [`../index.md`](../index.md)
 - [`actor_model.md`](actor_model.md)
+- [`../decisions/authority_model.md`](../decisions/authority_model.md)
+
+Status: 2026-04-10
 
 ## Multiplayer Model
 
-Godot's built-in `MultiplayerAPI` with `ENetMultiplayerPeer`. One player acts as host
-(server + client, peer id 1), others connect as clients. Max 4 players, port 7777.
+The project uses Godot's built-in `MultiplayerAPI` with `ENetMultiplayerPeer`.
+One player acts as host (server + client, peer id `1`), other peers connect as clients.
+The current lobby flow uses port `7777` and supports up to 4 players.
 
-- The project uses a hybrid authority model rather than a single rule for every subsystem.
-- Player movement is currently trusted co-op and owning-peer-authoritative with remote smoothing.
-- World mutation, structures, placement, inventory, and persistence are authoritative on the host.
-- Breaking now uses host-authoritative target damage, cooldown, and completion.
-- Uses `@rpc` annotations for remote procedure calls.
+The project uses a hybrid authority model rather than one blanket rule:
+
+- player movement is trusted co-op and owning-peer-authoritative
+- inventory, placement, chunk mutation, structure mutation, and persistence are host-authoritative
+- primary use / breaking is host-authoritative for damage, cooldown, crack stage, and completion
 
 See [`../decisions/authority_model.md`](../decisions/authority_model.md) for the accepted direction and tradeoffs.
 
 ### Current authority profile
 
 - Movement:
-  - input is processed on the owning peer
-  - the owning peer simulates movement locally
-  - remote peers render replicated state with smoothing
+  - the owning peer processes local input
+  - that peer simulates its own movement locally
+  - remote peers render replicated snapshots with interpolation / short extrapolation
 - Inventory:
-  - clients send requests
-  - the host owns canonical inventory and held-slot state
+  - clients send intent RPCs
+  - the host owns canonical inventory and held cursor-slot state
 - Placement:
   - clients send placement intent
   - the host validates range, occupancy, and item placement
@@ -38,11 +42,11 @@ See [`../decisions/authority_model.md`](../decisions/authority_model.md) for the
 
 ### Current breaking behavior
 
-- clients may start crack visuals immediately
-- clients send item-use intent instead of owning break completion
-- the host validates target, range, equipped item, and hit cadence
+- clients may begin local crack feedback immediately
+- clients send primary-use keepalive intent while holding the target
+- the host validates target identity, range, and cooldown cadence
 - the host tracks shared damaged-target state so multiple players can mine the same target together
-- the host applies discrete hits through a unified item-use cooldown model
+- the host resolves mining damage from the authoritative equipped item
 - the host emits crack-stage updates and the final break mutation
 
 ## Scene Flow
@@ -50,59 +54,91 @@ See [`../decisions/authority_model.md`](../decisions/authority_model.md) for the
 ```text
 lobby_ui.tscn  (entry point)
   Host World     -> NetworkManager.host_game() -> change_scene_to "main.tscn"
-  Join World     -> NetworkManager.join_game() -> change_scene_to "main.tscn"
-  Settings       -> local profile/settings only
+  Join World     -> NetworkManager.join_game() -> on success change_scene_to "main.tscn"
+  Settings       -> local ClientProfile only
 
-main.tscn  (game world)
+main.tscn  (game session composition root)
   World (WorldGenerator)
-    TerrainLayer (TileMapLayer) - authoritative gameplay tiles
-    PlantLayer (TileMapLayer)   - plant/coral visual overlay + sway shader
+    TerrainLayer      - hidden authoritative tile layer for collision / speed checks
+    BaseVisualLayer   - visible flat tile visuals for non-plant flat tiles
+    PlantLayer        - plant / coral visuals with vegetation sway shader
     ChunkManager
-  Players (Node2D)              - populated by MultiplayerSpawner
-  PlayerSpawner (MultiplayerSpawner)
-  CharacterSetup (CanvasLayer)  - shown when a world has no character for this account
+    StructureManager
+    DepthSorted
+      Players         - populated by MultiplayerSpawner
+      BreakVisuals    - created at runtime by BreakVisualService
+    ChunkDebugCanvas
+  Items               - world item entities
+  PlayerSpawner       - MultiplayerSpawner for players
+  ItemSpawner         - MultiplayerSpawner for dropped items
+  InventoryManager
+    InventoryAuthorityService
+    WorldPlacementService
+  SessionBootstrapService
+  SessionJoinService
+  SessionIdentityService
+  CharacterSetupService
+  PlayerSpawnService
+  SessionPersistenceService
+  WorldDropService
+  UseAuthorityService
+  BreakVisualService
+  ScreenEffects
+    CanvasLayer (100)
+      UnderwaterOverlay
+  OverheadLayer (112)
+  CharacterSetup (115)
 ```
 
-Note:
+Per-player local UI still lives on the player scene:
 
-- the current runtime scene and spawning flow are still player-specific in naming
-- the reusable gameplay baseline for future living units is defined separately in [`actor_model.md`](actor_model.md)
+- `HotbarUI`
+- `ChatUI`
+- `DebugOverlay`
+- `SessionMenu`
+
+The runtime scene and naming are still player-specific. The reusable gameplay baseline for future living units is defined separately in [`actor_model.md`](actor_model.md).
 
 ## Player Spawning Flow
 
 ```text
-Host _ready()
+Host boot
+  -> SessionBootstrapService activates the selected world
+  -> load or create world seed
   -> world.initialize(seed)
-  -> load_chunks_around(spawn_pos)
-  -> PlayerSpawner.spawn({peer_id, x, y})   <- replicates to all peers automatically
+  -> load structures from save
+  -> host local join handled through SessionJoinService
 
-Client _ready()
-  -> _client_ready.rpc_id(1)
+Client boot
+  -> SessionJoinService sends _client_ready(account_id, display_name) to the host
 
-Host receives _client_ready from client
+Host receives _client_ready
+  -> validate account id / duplicate login
   -> _receive_world_seed.rpc_id(sender, seed)
+  -> register peer identity
   -> if world has no character for account_id:
-       open character setup
-       wait for character submit
-  -> else:
-       PlayerSpawner.spawn({peer_id, x, y, character_name, appearance})
-         <- replicates to all peers automatically
+       CharacterSetupService opens setup UI
+     else:
+       PlayerSpawnService completes the join
 
-Client receives _receive_world_seed
-  -> world.initialize(seed)
-  -> load_chunks_around(spawn_pos)
+PlayerSpawnService.complete_join()
+  -> choose saved or default spawn position
+  -> preload chunks around spawn
+  -> sync structures to the joining peer
+  -> PlayerSpawner.spawn({peer_id, x, y, character_name, appearance})
+  -> create / restore inventory
 ```
 
-`MultiplayerSpawner` calls `_create_player(data)` on every peer to reconstruct the node,
-including setting `multiplayer_authority`. No manual `_request_spawn_player` RPC needed.
+`PlayerSpawner.spawn_function` is wired to `PlayerSpawnService.create_player()`.
+That method instantiates the player scene, sets `multiplayer_authority`, injects session references, and applies character data.
 
 ## Identity & Persistence
 
 - `peer_id` is session-local network identity only.
 - `account_id` is the persistent player identity used for saves.
-- Current provider format: `local:<client_id>`.
-- Player saves are keyed by `(world, account_id)`, not by `peer_id`.
-- Each world stores exactly one character per `account_id`.
+- current provider format: `local:<client_id>`
+- player saves are keyed by `(world, account_id)`, not by `peer_id`
+- each world stores exactly one character per `account_id`
 
 Normalized player save shape:
 
@@ -119,66 +155,78 @@ progress
 
 Legacy flat saves are normalized on load so old worlds remain readable.
 
-## Autoloads (Singletons)
+## Autoloads
 
-- **GameConstants** - static configuration values (tile size, chunk size, swim speeds, port).
-- **NetworkManager** - ENet connection setup, `players` dict, connect/disconnect signals.
+- **GameConstants** - static configuration values for world, networking, inventory, and persistence.
+- **GameEvents** - cross-system gameplay event bus.
+- **NetworkManager** - ENet connection setup, peer lifecycle, ping, and visible-name state sync.
+- **SaveManager** - world and player persistence.
+- **ClientProfile** - local persistent account identity and default display name.
+- **ChatManager** - chat state and session-local chat context.
 
 ## Tile System
 
-`TileProperties` (`scripts/world/tile_properties.gd`) is the single source of truth for
-all tile types.
+`TileProperties` (`scripts/world/tile_properties.gd`) is the single source of truth for all tile types.
 
-Core gameplay fields:
-
-| Field | Purpose |
-|---|---|
-| `id` | Stable integer ID - never reuse a removed ID |
-| `name` | Canonical string key - used in saves/code |
-| `atlas_coord` | Default atlas coord in `terrain_tileset.tres` |
-| `solid` | Whether the tile has physics collision |
-| `swim_speed_factor` | Speed multiplier when overlapping |
-| `breakable` | Can the player mine this tile? |
-| `hardness` | Seconds to break |
-
-Render metadata:
+Current gameplay-facing fields:
 
 | Field | Purpose |
 |---|---|
-| `render_mode` | Direct atlas tile or terrain-connect tile |
-| `terrain_set_id` / `terrain_id` | Terrain metadata for autotiling |
-| `visual_layer` | Optional overlay tilemap for animated visuals |
-| `shader_profile` | Which overlay shader profile to use |
-| `family` | High-level content family for asset organization |
+| `id` | Stable integer ID. Never reuse a removed ID. |
+| `name` | Canonical string key used in code and save data. |
+| `atlas_coord` | Base atlas coord in `terrain_tileset.tres`. |
+| `solid` | Whether the tile blocks movement. |
+| `swim_speed_factor` | Speed multiplier when overlapping a non-solid tile. |
+| `breakable` | Whether the tile can be mined. |
+| `hardness` | Target durability for host-authoritative breaking. |
+| `plant` | Whether this tile should render on `PlantLayer` instead of `BaseVisualLayer`. |
+| `drop_tile_id` | Which gameplay tile id to use for drop lookup. |
+| `placement_variants` | Optional tile ids used for randomized placement visuals. |
+| `render_profile` | Current render mode (`FLAT` or `TALL_STRUCTURE`). |
+| `body_atlas_coord` / `cap_atlas_coord` / `cap_offset_px` | Visual data for tall-structure block rendering. |
+
+Current registry surface:
 
 ```text
-TileProperties.registry              - int ID -> TileProperties
-TileProperties.by_name               - string -> int ID
-TileProperties.get_id_from_atlas()   - atlas coord -> int ID
-TileProperties.EMPTY                 - no tile
+TileProperties.registry   - int ID -> TileProperties
+TileProperties.by_name    - string name -> int ID
+TileProperties.EMPTY      - no tile / open water
 ```
 
 Integer IDs are permanent and must never be reassigned.
 
-## Chunk System
+## Chunk System And World Rendering
 
-- World divided into 16x16-tile chunks.
-- `ChunkData` stores `base_tiles` (PackedByteArray) + `modifications` (Dictionary).
-- `ChunkManager` polls player positions every 0.2s, load radius=3, unload radius=5.
-- Host generates chunks via `FastNoiseLite`; clients request via `_request_chunk` RPC.
-- Tile visuals are resolved generically from `TileProperties`:
-  - direct atlas tiles go straight to `TerrainLayer`
-  - terrain-connect rendering is possible through tile metadata when needed
-  - optional overlay layers such as `PlantLayer` can mirror base content visually when needed
-- `TerrainLayer` remains the authority for physics and speed checks.
-- Modifications (broken tiles) persist across load/unload cycles in `ChunkData`.
+- the world is divided into `16x16`-tile chunks
+- `ChunkData` stores `base_tiles` (`PackedByteArray`) plus `modifications` (`Dictionary`)
+- `ChunkManager` polls player positions every `0.2s`
+- load radius is `3`, unload radius is `5`
+- the host generates chunks via `FastNoiseLite`
+- clients request missing chunks through `_request_chunk`
+
+Current layer split:
+
+- `TerrainLayer` is the authoritative tile occupancy layer used for collision and movement-speed checks
+- `BaseVisualLayer` renders the visible flat block sprites for non-plant flat tiles
+- `PlantLayer` renders `plant` tiles and carries the vegetation sway shader
+- tall structure blocks use runtime `Node2D` visuals instead of a single flat tile
+
+Persistence behavior:
+
+- modified chunks are kept in `ChunkData.modifications`
+- modified chunks are saved on unload and during autosave
+- chunk base terrain is regenerated from seed on load
+
+Current pragmatic runtime note:
+
+- `world_generator.gd` still diagnoses and repairs missing TileSet physics data during `initialize()`
 
 ## Block Breaking
 
 ```text
 Client holds LMB within range
   -> local crack feedback can start immediately
-  -> client sends "start primary use on target" intent to host
+  -> client sends / refreshes primary-use target intent to host
 
 Host use authority
   -> resolves active item from authoritative inventory state
@@ -187,50 +235,39 @@ Host use authority
   -> keeps damaged targets alive for a short timeout
   -> aggregates hits from multiple players on the same target
   -> replicates crack stage to all peers
-  -> on durability exhaustion: mutates world and broadcasts break result
+  -> on durability exhaustion: mutates world or structure state and broadcasts the result
 ```
 
 Design intent:
 
-- breaking is treated as one kind of item use, not as a separate time-simulation subsystem
+- breaking is one kind of item use, not a separate client-timed subsystem
 - better tools can reduce cooldown and/or increase break damage
-- the same cooldown lane can later prevent simultaneous use of incompatible actions such as mining and attacking in the same frame window
+- the same cooldown lane can later cover additional primary-use actions
 
 Current item-use scaffold:
 
-- `ItemProperties` now exposes server-authoritative `break_damage` and `use_cooldown`
-- `ItemProperties` also exposes a lightweight `tool_kind` classification for future rules
-- the host resolves these values from the active slot when applying a mining hit
-- all current items still use the default baseline values, so no gameplay balance changed yet
-- the first tool can be introduced before a dedicated tool-atlas pipeline exists by using a temporary placeholder icon in the current item rendering path
+- `ItemProperties` exposes server-authoritative `break_damage` and `use_cooldown`
+- `ItemProperties` exposes `tool_kind` for future rule branching
+- the host resolves these values from the active slot when applying a hit
+- `stone_pickaxe` already exists and uses custom values plus a custom tool atlas icon
 
 ## Visual Effects
 
-- **Underwater shader** (`assets/shaders/underwater.gdshader`) - fullscreen wave distortion
-  + blue tint. Applied to a `ColorRect` on `CanvasLayer 100`.
-- **Coral sway shader** (`assets/shaders/coral_sway.gdshader`) - vertex displacement on
-  `PlantLayer` only. Neighboring coral tiles get phase/amplitude variation so they do not
-  move in lockstep.
-- **Bubbles** - `CPUParticles2D` in `UnderwaterEffects`, local player only.
+- **Underwater shader** (`assets/shaders/underwater.gdshader`) - fullscreen distortion and tint on `CanvasLayer 100`
+- **Vegetation sway shader** (`assets/shaders/vegetation_sway.gdshader`) - vertex displacement on `PlantLayer`
+- **BreakVisualService** - generated crack-stage sprites and break particles
+- **UnderwaterEffects** - local player underwater presentation helpers such as bubbles
 
-### CanvasLayer convention
+### Current CanvasLayer usage
 
-Use `CanvasLayer` to separate world rendering, fullscreen effects, and UI:
+These numbers describe the current implementation, not a strict future-proof convention:
 
-- `0` - world rendering (default gameplay scene content)
-- `50` - world-adjacent overlays/effects if needed later
-- `100` - fullscreen world effects such as the underwater distortion/tint
-- `110` - HUD such as hotbar, status bars, and crosshair
-- `120` - menus and windows such as inventory, crafting, and session UI
-- `130` - modal popups and debug overlays
-
-Rule of thumb:
-
-- Content at or below `100` is allowed to be affected by fullscreen world shaders.
-- UI that must remain crisp and readable belongs above `100`.
+- `100` - fullscreen underwater overlay
+- `110` - hotbar, chat, session menu, chunk debug canvas
+- `112` - overhead labels
+- `115` - character setup modal
+- `120` - player debug overlay
 
 ## Underwater Physics
 
-No gravity. Players swim freely in all directions via `move_and_slide()` with a
-velocity vector controlled fully by input (X and Y). Speed is modulated by the tile
-the player overlaps: open water = 1.0x, coral = 0.4x.
+There is no gravity. Players swim freely in all directions via `move_and_slide()` with a velocity vector controlled by input on both axes. Speed is modulated by the tile the player overlaps: open water uses `1.0x`, coral uses `0.4x`.

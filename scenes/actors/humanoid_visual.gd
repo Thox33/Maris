@@ -3,20 +3,23 @@ extends Node2D
 
 const ACTOR_STATE := preload("res://scripts/actor/actor_state.gd")
 const ITEM_ICON_VISUALS := preload("res://scripts/items/item_icon_visuals.gd")
-const CHARACTER_APPEARANCE := preload("res://scripts/player/character_appearance.gd")
-const HUMANOID_VISUAL_PROFILE := preload("res://scripts/player/humanoid_visual_profile.gd")
+const CHARACTER_APPEARANCE := preload("res://scripts/actor/character_appearance.gd")
+const HUMANOID_VISUAL_PROFILE := preload("res://scripts/actor/humanoid_visual_profile.gd")
 const ITEM_PROPERTIES := preload("res://scripts/items/item_properties.gd")
 
+
+@export var visual_profile: HumanoidVisualProfile
 
 @onready var _body: AnimatedSprite2D = $Body
 @onready var _hair: AnimatedSprite2D = $Hair
 @onready var _face: Sprite2D = $Face
 @onready var _held_item_anchor: Node2D = $HeldItemAnchor
 
+var _actor: Node
 var _appearance: Dictionary = CHARACTER_APPEARANCE.create_default_appearance()
 var _current_animation: String = ""
 var _held_item_grip_offset: Vector2 = Vector2.ZERO
-var _profile: HumanoidVisualProfile = HUMANOID_VISUAL_PROFILE.create_default_profile()
+var _profile: HumanoidVisualProfile
 var _inventory_manager: Node
 var _held_item_sprite: Sprite2D
 var _displayed_held_item_id: int = ITEM_PROPERTIES.NONE
@@ -38,12 +41,22 @@ const _EYE_DOWN_RIGHT := 8
 
 
 func _ready() -> void:
+	_profile = visual_profile if visual_profile != null else HUMANOID_VISUAL_PROFILE.create_default_profile()
 	_load_sprites()
 	_ensure_held_item_sprite()
 	_body.frame_changed.connect(_on_body_frame_changed)
-	var actor := get_parent().get_parent()
-	if actor != null and actor.has_signal("actor_state_changed"):
+	_apply_appearance_colors()
+	_refresh_held_item_visual()
+
+
+## Call this from the owning actor's _ready() to wire up state updates.
+## Replaces the fragile get_parent().get_parent() tree walk.
+func setup(actor: Node) -> void:
+	_actor = actor
+	if actor.has_signal("actor_state_changed"):
 		actor.actor_state_changed.connect(_on_actor_state_changed)
+	if actor.has_method("get_actor_appearance"):
+		_appearance = CHARACTER_APPEARANCE.normalize_appearance(actor.get_actor_appearance())
 	_refresh_from_actor()
 	_apply_appearance_colors()
 	_refresh_held_item_visual()
@@ -57,6 +70,7 @@ func apply_appearance(appearance: Dictionary) -> void:
 func set_visual_profile(profile: HumanoidVisualProfile) -> void:
 	if profile == null:
 		return
+	visual_profile = profile
 	_profile = profile
 	if is_node_ready():
 		_load_sprites()
@@ -90,10 +104,9 @@ func _on_body_frame_changed() -> void:
 
 
 func _refresh_from_actor() -> void:
-	var actor := get_parent().get_parent()
-	if actor == null or not actor.has_method("get_actor_state"):
+	if _actor == null or not _actor.has_method("get_actor_state"):
 		return
-	_apply_actor_state(actor.get_actor_state())
+	_apply_actor_state(_actor.get_actor_state())
 
 
 func _apply_actor_state(actor_state: Dictionary) -> void:
