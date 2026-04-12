@@ -17,6 +17,8 @@ var noise := FastNoiseLite.new()
 var world_seed: int = 0
 
 @onready var ground_layer: TileMapLayer = $GroundLayer
+@onready var ground_collision_layer: TileMapLayer = $GroundCollisionLayer
+@onready var liquid_layer: TileMapLayer = $LiquidLayer
 @onready var terrain_layer: TileMapLayer = $TerrainLayer
 @onready var base_visual_layer: TileMapLayer = $BaseVisualLayer
 @onready var decor_layer: TileMapLayer = $DepthSorted/DecorLayer
@@ -32,6 +34,8 @@ func _ready() -> void:
 		chunk_manager.setup(
 			self,
 			ground_layer,
+			ground_collision_layer,
+			liquid_layer,
 			terrain_layer,
 			base_visual_layer,
 			decor_layer,
@@ -51,6 +55,8 @@ func initialize(seed_value: int) -> void:
 	_diagnose_and_fix_physics()
 	_setup_decor_layer()
 	_setup_ground_layer()
+	_setup_ground_collision_layer()
+	_setup_liquid_layer()
 
 
 ## Builds a runtime TileSet for the GroundLayer from ground_tiles.png.
@@ -65,14 +71,70 @@ func _setup_ground_layer() -> void:
 	var source := TileSetAtlasSource.new()
 	source.texture = texture
 	source.texture_region_size = Vector2i(GameConstants.TILE_SIZE, GameConstants.TILE_SIZE)
-	# Register every tile in the atlas so Godot allows set_cell() with those coords.
+	# Register only solid tiles — liquid tiles live in liquid_tiles.png, not here.
 	for ground_id: int in GroundTileProperties.registry:
 		var props := GroundTileProperties.get_properties(ground_id)
-		source.create_tile(props.atlas_coord)
+		if props.is_solid:
+			source.create_tile(props.atlas_coord)
 	var tile_set := TileSet.new()
 	tile_set.tile_size = Vector2i(GameConstants.TILE_SIZE, GameConstants.TILE_SIZE)
 	tile_set.add_source(source)
 	ground_layer.tile_set = tile_set
+
+
+## Builds a runtime collision-only TileSet for GroundCollisionLayer.
+## One transparent tile is enough: solid ground erases it, liquid/void place it.
+func _setup_ground_collision_layer() -> void:
+	if ground_collision_layer == null:
+		return
+	var image := Image.create(GameConstants.TILE_SIZE, GameConstants.TILE_SIZE, false, Image.FORMAT_RGBA8)
+	image.fill(Color(0, 0, 0, 0))
+	var texture := ImageTexture.create_from_image(image)
+	var source := TileSetAtlasSource.new()
+	source.texture = texture
+	source.texture_region_size = Vector2i(GameConstants.TILE_SIZE, GameConstants.TILE_SIZE)
+	source.create_tile(Vector2i.ZERO)
+
+	var tile_set := TileSet.new()
+	tile_set.tile_size = Vector2i(GameConstants.TILE_SIZE, GameConstants.TILE_SIZE)
+	tile_set.add_physics_layer()
+	tile_set.set_physics_layer_collision_layer(0, 1)
+	tile_set.add_source(source)
+
+	var tile_data := source.get_tile_data(Vector2i.ZERO, 0)
+	tile_data.add_collision_polygon(0)
+	tile_data.set_collision_polygon_points(0, 0, collision_polygon)
+
+	ground_collision_layer.tile_set = tile_set
+
+
+## Builds a runtime TileSet for LiquidLayer from liquid_tiles.png and applies
+## the liquid animation shader.
+func _setup_liquid_layer() -> void:
+	if liquid_layer == null:
+		return
+	var texture := load("res://assets/tilesets/liquid_tiles.png") as Texture2D
+	if texture == null:
+		push_warning("[WorldGenerator] liquid_tiles.png not found — run generate_liquid_atlas.gd first.")
+		return
+	var source := TileSetAtlasSource.new()
+	source.texture = texture
+	source.texture_region_size = Vector2i(GameConstants.TILE_SIZE, GameConstants.TILE_SIZE)
+	# Register only liquid tiles — atlas coords are relative to liquid_tiles.png.
+	for ground_id: int in GroundTileProperties.registry:
+		var props := GroundTileProperties.get_properties(ground_id)
+		if props.is_liquid:
+			source.create_tile(props.atlas_coord)
+	var tile_set := TileSet.new()
+	tile_set.tile_size = Vector2i(GameConstants.TILE_SIZE, GameConstants.TILE_SIZE)
+	tile_set.add_source(source)
+	liquid_layer.tile_set = tile_set
+	# Apply animation shader.
+	var shader := load("res://assets/shaders/liquid.gdshader") as Shader
+	if shader != null:
+		var mat := ShaderMaterial.new()
+		mat.shader = shader
+		liquid_layer.material = mat
 
 
 func _setup_decor_layer() -> void:
@@ -165,11 +227,20 @@ func _get_ground_tile_for_position(x: int, y: int) -> int:
 	var depth_ratio: float = float(y) / float(GameConstants.WORLD_SCALE)
 	var density: float = n + (depth_ratio * 1.5 - 0.5)
 
+	# Lava: rare deep pockets (depth > 70 %, noise strongly negative).
+	if depth_ratio > 0.7 and density < -0.2:
+		return GroundTileProperties.by_name["lava"]
+
+	# Water: surface depressions (depth < 35 %, density low enough to be "sunken").
+	if depth_ratio < 0.35 and density < -0.4:
+		return GroundTileProperties.by_name["water"]
+
 	var base_name: String
 	if density > 0.6:
 		base_name = "stone"
 	elif density > 0.0:
-		base_name = "dirt"
+		# Grass covers the top ~25 tiles (depth_ratio < 0.1 with WORLD_SCALE=256).
+		base_name = "grass" if depth_ratio < 0.1 else "dirt"
 	else:
 		base_name = "sand"
 

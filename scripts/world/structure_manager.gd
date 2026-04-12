@@ -90,7 +90,7 @@ func can_place_structure_at(target_cell: Vector2i, structure_id: String) -> bool
 	for cell in definition.get_occupied_world_cells(origin):
 		if is_cell_occupied(cell):
 			return false
-		if chunk_manager.get_top_tile_at(cell) != TileProperties.EMPTY:
+		if not chunk_manager.can_place_top_tile_at(cell):
 			return false
 
 	return true

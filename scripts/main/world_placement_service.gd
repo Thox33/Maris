@@ -35,7 +35,7 @@ func validate_and_place_world_item(sender_id: int, item_id: int, coord: Vector2i
 		return false
 
 	if item_props.places_tile():
-		if not chunk_manager.is_cell_empty(coord):
+		if not chunk_manager.can_place_top_tile_at(coord):
 			return false
 		if structure_manager != null and structure_manager.is_cell_occupied(coord):
 			return false

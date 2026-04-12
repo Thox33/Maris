@@ -11,8 +11,14 @@ const DEBUG_LOG: bool = false
 ## Reference to the parent WorldGenerator (set by setup()).
 var world_generator: Node2D
 
-## Ground-layer TileMapLayer — renders the base floor behind everything.
+## Ground-layer TileMapLayer — renders solid floor tiles behind everything.
 var ground_layer: TileMapLayer
+
+## Collision-only TileMapLayer for impassable ground states (liquid / void).
+var ground_collision_layer: TileMapLayer
+
+## Liquid-layer TileMapLayer — renders water/lava tiles with animation shader.
+var liquid_layer: TileMapLayer
 
 ## Reference to the global TileMapLayer.
 var terrain_layer: TileMapLayer
@@ -41,6 +47,8 @@ var _unload_queue: Array[Vector2i] = []
 func setup(
 	p_world_generator: Node2D,
 	p_ground_layer: TileMapLayer,
+	p_ground_collision_layer: TileMapLayer,
+	p_liquid_layer: TileMapLayer,
 	p_terrain_layer: TileMapLayer,
 	p_base_visual_layer: TileMapLayer,
 	p_decor_layer: TileMapLayer,
@@ -49,6 +57,8 @@ func setup(
 ) -> void:
 	world_generator = p_world_generator
 	ground_layer = p_ground_layer
+	ground_collision_layer = p_ground_collision_layer
+	liquid_layer = p_liquid_layer
 	terrain_layer = p_terrain_layer
 	base_visual_layer = p_base_visual_layer
 	decor_layer = p_decor_layer
@@ -198,6 +208,10 @@ func _erase_chunk(coord: Vector2i) -> void:
 			var cell := Vector2i(origin_x + local_x, origin_y + local_y)
 			if ground_layer != null:
 				ground_layer.erase_cell(cell)
+			if ground_collision_layer != null:
+				ground_collision_layer.erase_cell(cell)
+			if liquid_layer != null:
+				liquid_layer.erase_cell(cell)
 			terrain_layer.erase_cell(cell)
 			base_visual_layer.erase_cell(cell)
 			decor_layer.erase_cell(cell)
@@ -207,13 +221,18 @@ func _erase_chunk(coord: Vector2i) -> void:
 
 
 ## Generates a chunk from noise and restores any saved modifications from disk.
+## Handles v1 saves (flat {index: tile_id} dict, top-only) transparently.
 func _generate_and_restore(coord: Vector2i) -> ChunkData:
 	var chunk: ChunkData = world_generator.generate_chunk(coord)
 	var saved: Dictionary = SaveManager.load_chunk_modifications(coord)
 	if saved.has("top"):
+		# v2 format: {"top": {...}, "ground": {...}}
 		chunk.top_modifications = saved["top"]
-	if saved.has("ground"):
-		chunk.ground_modifications = saved["ground"]
+		if saved.has("ground"):
+			chunk.ground_modifications = saved["ground"]
+	elif not saved.is_empty():
+		# v1 format: flat {index: tile_id} — all entries were top-layer modifications
+		chunk.top_modifications = saved
 	return chunk
 
 
@@ -316,7 +335,7 @@ func _sync_break_tile(tx: int, ty: int) -> void:
 
 ## Returns true if a top tile can be placed at this coordinate.
 ## Requires: top layer is empty AND ground layer is solid (not void/liquid).
-func is_cell_empty(coord: Vector2i) -> bool:
+func can_place_top_tile_at(coord: Vector2i) -> bool:
 	if get_top_tile_at(coord) != TileProperties.EMPTY:
 		return false
 	var ground_id: int = get_ground_tile_at(coord)
@@ -424,15 +443,32 @@ func _erase_tall_structure_visual(coord: Vector2i) -> void:
 	visual.queue_free()
 
 
-## Places or erases a single cell on the ground layer.
+## Places or erases a single cell on the ground or liquid layer.
+## Solid tiles go to ground_layer; liquid/void set collision on ground_collision_layer.
 func _apply_ground_cell(cell: Vector2i, ground_id: int) -> void:
-	if ground_layer == null:
-		return
 	var props := GroundTileProperties.get_properties(ground_id)
 	if props == null:
-		ground_layer.erase_cell(cell)
+		# Void — erase visuals, keep collision.
+		if ground_layer != null:
+			ground_layer.erase_cell(cell)
+		if ground_collision_layer != null:
+			ground_collision_layer.set_cell(cell, 0, Vector2i.ZERO)
+		if liquid_layer != null:
+			liquid_layer.erase_cell(cell)
+	elif props.is_liquid:
+		if ground_layer != null:
+			ground_layer.erase_cell(cell)
+		if ground_collision_layer != null:
+			ground_collision_layer.set_cell(cell, 0, Vector2i.ZERO)
+		if liquid_layer != null:
+			liquid_layer.set_cell(cell, 0, props.atlas_coord)
 	else:
-		ground_layer.set_cell(cell, 0, props.atlas_coord)
+		if ground_layer != null:
+			ground_layer.set_cell(cell, 0, props.atlas_coord)
+		if ground_collision_layer != null:
+			ground_collision_layer.erase_cell(cell)
+		if liquid_layer != null:
+			liquid_layer.erase_cell(cell)
 
 
 func _cell_key(coord: Vector2i) -> String:
