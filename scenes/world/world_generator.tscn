@@ -23,11 +23,13 @@ modulate = Color(1, 1, 1, 0)
 [node name="BaseVisualLayer" type="TileMapLayer" parent="."]
 tile_set = ExtResource("2")
 
-[node name="PlantLayer" type="TileMapLayer" parent="."]
-tile_set = ExtResource("2")
-
 [node name="DepthSorted" type="Node2D" parent="."]
 y_sort_enabled = true
+
+[node name="DecorLayer" type="TileMapLayer" parent="DepthSorted"]
+tile_set = ExtResource("2")
+y_sort_enabled = true
+y_sort_origin = 16
 
 [node name="Players" type="Node2D" parent="DepthSorted"]
 y_sort_enabled = true

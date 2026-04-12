@@ -1,17 +1,19 @@
-# Inventory Plan
+# Inventory And Hotbar
 
 See also:
 
 - [`../index.md`](../index.md)
 - [`../architecture/overview.md`](../architecture/overview.md)
 
-Status: core HUD and host-authoritative interaction loop implemented by 2026-04-10
+Status: implemented baseline as of 2026-04-10
 
-## Goal
+## Purpose
 
-The inventory should behave like an expanded hotbar rather than a separate full-screen inventory mode.
+This document describes the current inventory and hotbar system.
 
-Current design goals remain:
+The inventory behaves like an expanded hotbar rather than a separate full-screen inventory mode. Crafting is out of scope for this document.
+
+## Design Goals
 
 - hotbar always visible
 - inventory expands upward above the hotbar
@@ -19,15 +21,13 @@ Current design goals remain:
 - mouse stays visible
 - world interaction should continue while the inventory is open, except when the cursor is actually over blocking UI
 
-Crafting is still out of scope for this document, but the current HUD should remain extensible enough for later chest and crafting panels.
-
 ## Current Implemented Shape
 
-The data model is already shared:
+The data model is shared:
 
 - one `Inventory` with `40` slots
 - the first `10` slots are the hotbar
-- hotbar and main inventory are just two views over the same underlying data
+- hotbar and main inventory are two views over the same underlying data
 - inventory state remains host-authoritative
 
 Current HUD layout:
@@ -45,7 +45,7 @@ open
 
 The hotbar stays anchored at the bottom. Opening the inventory currently shows or hides the upper inventory panel; there is not yet a dedicated open/close tween.
 
-## Current UI Structure
+## UI Structure
 
 The active HUD lives in the player's `HotbarUI` `CanvasLayer`.
 
@@ -66,7 +66,7 @@ HotbarUI
 
 Slots are created dynamically in code rather than instanced from a separate scene.
 
-## Current Input Model
+## Input Model
 
 Implemented controls:
 
@@ -82,7 +82,7 @@ Important correction:
 
 - `Tab` is not currently bound as an inventory toggle in the project input map
 
-## Current World-Interaction Contract
+## World-Interaction Contract
 
 The inventory does not globally block gameplay input.
 
@@ -99,7 +99,7 @@ This means:
 - empty space outside the inventory remains usable for the world
 - open inventory does not automatically pause or globally lock world interaction
 
-## Current Authority Split
+## Authority Split
 
 ### Inventory
 
@@ -118,7 +118,7 @@ It does not know about:
 
 ### InventoryManager
 
-`InventoryManager` is now the RPC bridge and local client sync surface.
+`InventoryManager` is the RPC bridge and local client sync surface.
 
 It owns:
 
@@ -145,7 +145,7 @@ That includes:
 - structure occupancy
 - item placement rules
 
-## Current Interaction Features
+## Implemented Interaction Features
 
 Already implemented:
 
@@ -162,17 +162,7 @@ Current visual limitation:
 
 - opening / closing is a visibility toggle, not a polished animated reveal yet
 
-## Remaining Follow-Ups
-
-Still reasonable future work:
-
-- add a proper reveal animation for opening / closing
-- add tooltips
-- add chest / secondary inventory support
-- add crafting-panel integration
-- decide later whether to migrate parts of the interaction to native `Control` drag-and-drop hooks
-
-## Decision Summary
+## Summary
 
 The project currently follows one shared-inventory model:
 
@@ -181,5 +171,3 @@ The project currently follows one shared-inventory model:
 - inventory expanding above the hotbar
 - UI only blocking world input where the cursor is actually over blocking controls
 - inventory mutations staying host-authoritative
-
-That model is already implemented and should remain the baseline for future chest and crafting extensions.

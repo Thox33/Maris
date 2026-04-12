@@ -8,8 +8,7 @@ See also:
 ## Architectural Groundwork (do early, expensive to retrofit)
 
 ### Session Architecture Refactor
-
-See [`session_architecture_refactor_plan.md`](session_architecture_refactor_plan.md).
+The refactor baseline is complete and its current shape is reflected in [`../architecture/overview.md`](../architecture/overview.md).
 
 - [x] Split `main.gd` into smaller session services
 - [x] Reduce direct scene-path coupling between runtime systems

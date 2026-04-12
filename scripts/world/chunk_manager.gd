@@ -15,8 +15,8 @@ var world_generator: Node2D
 var terrain_layer: TileMapLayer
 var base_visual_layer: TileMapLayer
 
-## PlantLayer rendering — plant tiles live here for the vegetation sway shader.
-var plant_layer: TileMapLayer
+## Depth-sorted decor tiles live here so they can interleave with actors.
+var decor_layer: TileMapLayer
 
 var tall_structure_visuals_node: Node2D
 var _tall_structure_visuals: Dictionary = {}
@@ -39,14 +39,14 @@ func setup(
 	p_world_generator: Node2D,
 	p_terrain_layer: TileMapLayer,
 	p_base_visual_layer: TileMapLayer,
-	p_plant_layer: TileMapLayer,
+	p_decor_layer: TileMapLayer,
 	p_tall_structure_visuals_node: Node2D,
 	p_players_node: Node,
 ) -> void:
 	world_generator = p_world_generator
 	terrain_layer = p_terrain_layer
 	base_visual_layer = p_base_visual_layer
-	plant_layer = p_plant_layer
+	decor_layer = p_decor_layer
 	tall_structure_visuals_node = p_tall_structure_visuals_node
 	_players_node = p_players_node
 
@@ -193,7 +193,7 @@ func _erase_chunk(coord: Vector2i) -> void:
 			var cell := Vector2i(origin_x + local_x, origin_y + local_y)
 			terrain_layer.erase_cell(cell)
 			base_visual_layer.erase_cell(cell)
-			plant_layer.erase_cell(cell)
+			decor_layer.erase_cell(cell)
 			_erase_tall_structure_visual(cell)
 
 	loaded_chunks.erase(coord)
@@ -345,27 +345,27 @@ func _sync_place_tile(tx: int, ty: int, tile_id: int) -> void:
 	_do_place_tile(Vector2i(tx, ty), tile_id)
 
 
-## Places or erases a single cell on terrain_layer (+ plant_layer mirror).
+## Places or erases a single cell on terrain/base/decor layers.
 func _apply_cell(cell: Vector2i, tile_id: int) -> void:
 	var props := TileProperties.get_properties(tile_id)
 	if props == null:
 		terrain_layer.erase_cell(cell)
 		base_visual_layer.erase_cell(cell)
-		plant_layer.erase_cell(cell)
+		decor_layer.erase_cell(cell)
 		_erase_tall_structure_visual(cell)
 	else:
 		terrain_layer.set_cell(cell, 0, props.atlas_coord)
 
-		if props.plant:
-			plant_layer.set_cell(cell, 0, props.atlas_coord)
+		if props.uses_sway_decor_layer():
+			decor_layer.set_cell(cell, 0, props.atlas_coord)
 			base_visual_layer.erase_cell(cell)
 		else:
-			plant_layer.erase_cell(cell)
+			decor_layer.erase_cell(cell)
 
-		if props.uses_tall_structure_visual():
+		if props.uses_node_based_world_visual():
 			base_visual_layer.erase_cell(cell)
 			_erase_tall_structure_visual(cell)
-		elif props.plant:
+		elif props.uses_sway_decor_layer():
 			_erase_tall_structure_visual(cell)
 		else:
 			base_visual_layer.set_cell(cell, 0, props.atlas_coord)
@@ -377,7 +377,7 @@ func _apply_cell(cell: Vector2i, tile_id: int) -> void:
 func _sync_tall_structure_visual(coord: Vector2i) -> void:
 	var tile_id: int = get_tile_at(coord)
 	var props := TileProperties.get_properties(tile_id)
-	if props == null or not props.uses_tall_structure_visual():
+	if props == null or not props.uses_node_based_world_visual():
 		_erase_tall_structure_visual(coord)
 		return
 
@@ -390,7 +390,7 @@ func _ensure_tall_structure_visual(coord: Vector2i, props: TileProperties) -> vo
 	if visual == null:
 		visual = TALL_STRUCTURE_VISUAL_SCENE.instantiate()
 		visual.name = "TallStructure_%s_%s" % [coord.x, coord.y]
-		visual.configure_parts(props.build_tall_structure_parts(GameConstants.TILE_SIZE), false)
+		visual.configure_parts(props.build_world_visual_parts(GameConstants.TILE_SIZE), false)
 		tall_structure_visuals_node.add_child(visual)
 		_tall_structure_visuals[key] = visual
 
@@ -398,7 +398,7 @@ func _ensure_tall_structure_visual(coord: Vector2i, props: TileProperties) -> vo
 		coord.x * GameConstants.TILE_SIZE + GameConstants.TILE_SIZE / 2.0,
 		(coord.y + 1) * GameConstants.TILE_SIZE
 	)
-	visual.configure_parts(props.build_tall_structure_parts(GameConstants.TILE_SIZE), false)
+	visual.configure_parts(props.build_world_visual_parts(GameConstants.TILE_SIZE), false)
 
 
 func _erase_tall_structure_visual(coord: Vector2i) -> void:

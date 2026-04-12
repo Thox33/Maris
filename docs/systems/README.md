@@ -18,3 +18,4 @@ Current system docs:
 
 - [`base_character_art_direction.md`](base_character_art_direction.md)
 - [`character_pipeline.md`](character_pipeline.md)
+- [`inventory_and_hotbar.md`](inventory_and_hotbar.md)

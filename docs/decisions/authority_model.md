@@ -5,7 +5,6 @@ See also:
 - [`../index.md`](../index.md)
 - [`../architecture/overview.md`](../architecture/overview.md)
 - [`../architecture/actor_model.md`](../architecture/actor_model.md)
-- [`../plans/session_architecture_refactor_plan.md`](../plans/session_architecture_refactor_plan.md)
 
 Status: accepted on 2026-04-05
 

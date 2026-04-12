@@ -12,7 +12,7 @@ Status: 2026-04-10
 
 ## Goal
 
-This document describes the currently implemented humanoid player pipeline.
+This document describes the currently implemented humanoid character pipeline.
 
 It covers:
 
@@ -25,7 +25,7 @@ This is a system document for the current codebase, not a speculative target doc
 
 ## Scope
 
-This document applies to the humanoid player character pipeline.
+This document applies to the humanoid character pipeline.
 
 It does not define:
 
@@ -143,8 +143,8 @@ Not every stored field is fully rendered yet.
 Current implementation:
 
 - `top_color_id` is applied to the body sprite via `modulate`
-- `hair_color_id` is prepared for hair tinting
-- `skin_tone_id`, `hair_style_id`, and `bottom_color_id` are already saved and synchronized, but are not yet fully expressed as separate visual layers
+- `hair_style_id` and `hair_color_id` drive a head-anchored hair PNG layer
+- `skin_tone_id` and `bottom_color_id` are already saved and synchronized, but are not yet fully expressed as separate visual layers
 
 This means the persistence model is ahead of the current art depth, which is intentional.
 
@@ -158,8 +158,8 @@ Player
 |-- VisualRoot
 |   `-- HumanoidVisual
 |       |-- Body           (AnimatedSprite2D)
-|       |-- Hair           (AnimatedSprite2D, currently hidden)
-|       |-- Face           (Sprite2D, currently hidden)
+|       |-- Hair           (Sprite2D, reparented under runtime HeadAnchor)
+|       |-- Face           (Sprite2D, static placeholder kept hidden)
 |       `-- HeldItemAnchor (Node2D)
 |-- OverheadAnchor
 |-- OverheadSource
@@ -174,8 +174,9 @@ Player
 Important runtime note:
 
 - the scene still contains `Hair` and `Face` nodes
-- the current implementation hides those nodes and builds the visible face dynamically under a runtime `FaceAnchor`
-- that runtime face uses separate eye and mouth sprite sheets, not a single static face PNG
+- the visible head presentation is assembled under a runtime `HeadAnchor`
+- hair is a separate PNG layer attached to that `HeadAnchor`
+- the runtime face still uses separate eye and mouth sprite sheets, not a single static face PNG
 
 ## Current Asset Set
 
@@ -185,6 +186,8 @@ The default humanoid profile currently loads:
 assets/sprites/characters/humanoid_v1/
   body_idle_side.png
   body_run_side.png
+  hair/
+    short_round.png
   faces/
     eyes_directions.png
     mouth_expressions.png
@@ -193,9 +196,10 @@ assets/sprites/characters/humanoid_v1/
 Current runtime behavior:
 
 - body animation sheets are loaded into `SpriteFrames`
+- hair currently uses one authored PNG style: `short_round`
+- hair is attached to the head anchor so it inherits per-frame head motion without needing its own animation sheet
 - the eye sheet contains directional eye frames
 - the mouth sheet currently provides a simple static mouth region
-- `Hair` exists as a reserved layer but is not yet backed by an active runtime sheet in the default profile
 
 ## Actor-To-Visual Contract
 
@@ -204,6 +208,7 @@ Current runtime behavior:
 - `locomotion_state`
 - `side_view_mirrored`
 - `held_item_id`
+- `equipped_head_item_id`
 - appearance data
 - look direction for the face
 
@@ -254,7 +259,27 @@ The face is intentionally lightweight:
 
 - eye direction is dynamic
 - the mouth is currently simple and mostly static
+- the hair layer is a fixed PNG chosen by hairstyle ID
 - the static `Face` scene node is not the active presentation path
+
+## Hair And Headgear Rule
+
+Hair is persistent appearance state.
+
+Current behavior:
+
+- `hair_style_id` selects a PNG path from `HumanoidVisualProfile`
+- `hair_color_id` tints that PNG via `modulate`
+- the hair PNG is attached relative to the shared `HeadAnchor`
+- `equipped_head_item_id` is already part of the actor-to-visual contract
+- when a head item is equipped, the hair layer is hidden
+
+This keeps the rule simple:
+
+- no headgear equipped: show hair
+- headgear equipped: hide hair
+
+Actual headgear art and gameplay-facing equipment slots are still follow-up work.
 
 ## Held Item Presentation
 
@@ -299,7 +324,8 @@ Known follow-ups:
 
 - make use of `skin_tone_id` in a visible layer
 - make use of `bottom_color_id` in a visible layer
-- activate hair-style-specific rendering instead of a hidden placeholder node
+- add more authored hairstyle PNGs beyond the current default `short_round`
+- add visible headgear art and connect it to a real equipment slot
 - add action-state animation overrides later if gameplay requires them
 
 ## Decision Summary

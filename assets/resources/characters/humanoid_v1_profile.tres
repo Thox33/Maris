@@ -26,9 +26,18 @@ held_item_rotation_offsets_deg = {
 "idle": [18.0, 18.0, 24.0, 24.0, 24.0, 24.0, 24.0, 18.0, 18.0, 18.0, 18.0, 18.0],
 "run": [80.0, 70.0, 50.0, 30.0, 20.0, 30.0, 50.0, 70.0]
 }
+head_offsets = {
+"idle": [Vector2(1, 2), Vector2(1, 2), Vector2(1, 2), Vector2(1, 1), Vector2(1, 1), Vector2(1, 1), Vector2(1, 1), Vector2(1, 1), Vector2(1, 1), Vector2(1, 2), Vector2(1, 2), Vector2(1, 2)],
+"run": [Vector2(1, 3), Vector2(1, 3), Vector2(1, 2), Vector2(1, 2), Vector2(1, 3), Vector2(1, 3), Vector2(1, 2), Vector2(1, 2)]
+}
 face_offsets = {
 "idle": [Vector2(1, 2), Vector2(1, 2), Vector2(1, 2), Vector2(1, 1), Vector2(1, 1), Vector2(1, 1), Vector2(1, 1), Vector2(1, 1), Vector2(1, 1), Vector2(1, 2), Vector2(1, 2), Vector2(1, 2)],
 "run": [Vector2(1, 3), Vector2(1, 3), Vector2(1, 2), Vector2(1, 2), Vector2(1, 3), Vector2(1, 3), Vector2(1, 2), Vector2(1, 2)]
 }
+hair_paths = {
+"short_round": "res://assets/sprites/characters/humanoid_v1/hair/short_round.png"
+}
+foot_anchor_offset_px = 12
+hair_local_offset = Vector2(0, -8)
 eye_path = "res://assets/sprites/characters/humanoid_v1/faces/eyes_directions.png"
 mouth_path = "res://assets/sprites/characters/humanoid_v1/faces/mouth_expressions.png"

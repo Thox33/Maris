@@ -9,7 +9,7 @@ visual_profile = ExtResource("2_profile")
 
 [node name="Body" type="AnimatedSprite2D" parent="." unique_id=1246326878]
 
-[node name="Hair" type="AnimatedSprite2D" parent="." unique_id=779745754]
+[node name="Hair" type="Sprite2D" parent="." unique_id=779745754]
 
 [node name="Face" type="Sprite2D" parent="." unique_id=2059815087]
 

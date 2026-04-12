@@ -10,6 +10,7 @@ const ITEM_PROPERTIES := preload("res://scripts/items/item_properties.gd")
 var _humanoid_visual: HumanoidVisual
 var _appearance: Dictionary = CHARACTER_APPEARANCE.create_default_appearance()
 var _held_item_id: int = ITEM_PROPERTIES.NONE
+var _equipped_head_item_id: int = ITEM_PROPERTIES.NONE
 var _character_name: String = ""
 
 
@@ -30,6 +31,17 @@ func get_actor_appearance() -> Dictionary:
 	return _appearance.duplicate(true)
 
 
+func set_equipped_head_item_id(item_id: int) -> void:
+	if _equipped_head_item_id == item_id:
+		return
+	_equipped_head_item_id = item_id
+	actor_state_changed.emit()
+
+
+func get_equipped_head_item_id() -> int:
+	return _equipped_head_item_id
+
+
 ## Override in subclasses to provide a display name from a different source.
 func get_actor_display_name() -> String:
 	return _character_name
@@ -39,5 +51,6 @@ func get_actor_state() -> Dictionary:
 	var state := super.get_actor_state()
 	state["display_name"] = get_actor_display_name()
 	state["held_item_id"] = _held_item_id
+	state["equipped_head_item_id"] = _equipped_head_item_id
 	state["appearance"] = _appearance
 	return state

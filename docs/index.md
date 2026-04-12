@@ -22,10 +22,9 @@ The documentation is organized by document type, not by age or by whatever file 
 - [`decisions/authority_model.md`](decisions/authority_model.md)
 - [`systems/base_character_art_direction.md`](systems/base_character_art_direction.md)
 - [`systems/character_pipeline.md`](systems/character_pipeline.md)
+- [`systems/inventory_and_hotbar.md`](systems/inventory_and_hotbar.md)
 - [`plans/roadmap.md`](plans/roadmap.md)
-- [`plans/session_architecture_refactor_plan.md`](plans/session_architecture_refactor_plan.md)
 - [`plans/animation_and_character_plan.md`](plans/animation_and_character_plan.md)
-- [`plans/inventory_plan.md`](plans/inventory_plan.md)
 
 ## Documentation Rules
 
@@ -37,6 +36,7 @@ The documentation is organized by document type, not by age or by whatever file 
 - Put feature-internal behavior into `systems/`.
 - Put future work and phased rollouts into `plans/`.
 - Put important reasoning and tradeoffs into `decisions/`.
+- When a plan becomes implemented reality, migrate the lasting parts into `systems/` or `architecture/`, or delete the file if Git history is sufficient.
 - Add a short `See also` section when a doc has obvious related references.
 - Update links immediately when files move or are renamed.
 

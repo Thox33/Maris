@@ -99,6 +99,27 @@ Per-player local UI still lives on the player scene:
 
 The runtime scene and naming are still player-specific. The reusable gameplay baseline for future living units is defined separately in [`actor_model.md`](actor_model.md).
 
+## Session Service Ownership
+
+The session composition root is intentionally thin. `main.gd` wires scene references and delegates runtime responsibilities to dedicated services instead of owning session logic directly.
+
+Current service ownership:
+
+- `SessionBootstrapService` - selected-world activation, seed load/create flow, world initialization order, and dedicated-server bootstrap differences
+- `SessionJoinService` - `_client_ready`, join validation, duplicate-account rejection, and world-seed handoff
+- `SessionIdentityService` - `peer_id -> account_id`, `peer_id -> display_name`, and identity snapshot broadcast
+- `CharacterSetupService` - pending character setup state, setup UI wiring, and creation submission
+- `PlayerSpawnService` - spawn payload creation, spawn restoration, chunk preload before spawn, and inventory restore handoff
+- `SessionPersistenceService` - autosave orchestration, world save orchestration, disconnect save, and quit/leave save
+- `WorldDropService` - break-result to drop mapping and item entity spawn requests
+- `UseAuthorityService` - host-authoritative primary-use validation, cooldown handling, break damage, and damaged-target replication
+- `BreakVisualService` - crack-stage and break-feedback presentation
+- `InventoryManager` - RPC bridge and local client sync surface for inventory state
+- `InventoryAuthorityService` - canonical host-side inventory rules and held-slot state
+- `WorldPlacementService` - host-side placement validation against world and structure occupancy
+
+This ownership split is current architecture, not an in-progress migration.
+
 ## Player Spawning Flow
 
 ```text
@@ -179,10 +200,9 @@ Current gameplay-facing fields:
 | `swim_speed_factor` | Speed multiplier when overlapping a non-solid tile. |
 | `breakable` | Whether the tile can be mined. |
 | `hardness` | Target durability for host-authoritative breaking. |
-| `plant` | Whether this tile should render on `PlantLayer` instead of `BaseVisualLayer`. |
+| `render_kind` | Which world render path this tile uses (`FLAT_BASE`, `SWAY_DECOR`, `TALL_STRUCTURE`). |
 | `drop_tile_id` | Which gameplay tile id to use for drop lookup. |
 | `placement_variants` | Optional tile ids used for randomized placement visuals. |
-| `render_profile` | Current render mode (`FLAT` or `TALL_STRUCTURE`). |
 | `body_atlas_coord` / `cap_atlas_coord` / `cap_offset_px` | Visual data for tall-structure block rendering. |
 
 Current registry surface:
@@ -207,8 +227,8 @@ Integer IDs are permanent and must never be reassigned.
 Current layer split:
 
 - `TerrainLayer` is the authoritative tile occupancy layer used for collision and movement-speed checks
-- `BaseVisualLayer` renders the visible flat block sprites for non-plant flat tiles
-- `PlantLayer` renders `plant` tiles and carries the vegetation sway shader
+- `BaseVisualLayer` renders the visible flat block sprites for `FLAT_BASE` tiles
+- `DecorLayer` lives inside the depth-sorted branch, renders `SWAY_DECOR` tiles, and carries the vegetation sway shader
 - tall structure blocks use runtime `Node2D` visuals instead of a single flat tile
 
 Persistence behavior:

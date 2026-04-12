@@ -11,7 +11,7 @@ const ITEM_PROPERTIES := preload("res://scripts/items/item_properties.gd")
 @export var visual_profile: HumanoidVisualProfile
 
 @onready var _body: AnimatedSprite2D = $Body
-@onready var _hair: AnimatedSprite2D = $Hair
+@onready var _hair: Sprite2D = $Hair
 @onready var _face: Sprite2D = $Face
 @onready var _held_item_anchor: Node2D = $HeldItemAnchor
 
@@ -24,7 +24,8 @@ var _inventory_manager: Node
 var _held_item_sprite: Sprite2D
 var _displayed_held_item_id: int = ITEM_PROPERTIES.NONE
 var _current_held_item_id: int = ITEM_PROPERTIES.NONE
-var _face_anchor: Node2D
+var _current_head_item_id: int = ITEM_PROPERTIES.NONE
+var _head_anchor: Node2D
 var _eye_sprite: Sprite2D
 var _mouth_sprite: Sprite2D
 
@@ -46,6 +47,7 @@ func _ready() -> void:
 	_ensure_held_item_sprite()
 	_body.frame_changed.connect(_on_body_frame_changed)
 	_apply_appearance_colors()
+	_refresh_hair_visual()
 	_refresh_held_item_visual()
 
 
@@ -59,12 +61,14 @@ func setup(actor: Node) -> void:
 		_appearance = CHARACTER_APPEARANCE.normalize_appearance(actor.get_actor_appearance())
 	_refresh_from_actor()
 	_apply_appearance_colors()
+	_refresh_hair_visual()
 	_refresh_held_item_visual()
 
 
 func apply_appearance(appearance: Dictionary) -> void:
 	_appearance = CHARACTER_APPEARANCE.normalize_appearance(appearance)
 	_apply_appearance_colors()
+	_refresh_hair_visual()
 
 
 func set_visual_profile(profile: HumanoidVisualProfile) -> void:
@@ -75,6 +79,7 @@ func set_visual_profile(profile: HumanoidVisualProfile) -> void:
 	if is_node_ready():
 		_load_sprites()
 		_update_held_item_anchor()
+		_update_head_anchor()
 
 
 func get_held_item_anchor() -> Node2D:
@@ -100,7 +105,7 @@ func _on_actor_state_changed() -> void:
 
 func _on_body_frame_changed() -> void:
 	_update_held_item_anchor()
-	_update_face_anchor()
+	_update_head_anchor()
 
 
 func _refresh_from_actor() -> void:
@@ -118,6 +123,7 @@ func _apply_actor_state(actor_state: Dictionary) -> void:
 	var anim := "run" if locomotion == ACTOR_STATE.LOCOMOTION_MOVE else "idle"
 	_play_animation(anim)
 	_apply_held_item_id(int(actor_state.get("held_item_id", ITEM_PROPERTIES.NONE)))
+	_apply_head_item_id(int(actor_state.get("equipped_head_item_id", ITEM_PROPERTIES.NONE)))
 
 
 func _apply_appearance_colors() -> void:
@@ -138,9 +144,7 @@ func _play_animation(anim_name: String) -> void:
 	if _body.sprite_frames != null and _body.sprite_frames.has_animation(anim_name):
 		_body.play(anim_name)
 	_update_held_item_anchor()
-	_update_face_anchor()
-	if _hair.sprite_frames != null and _hair.sprite_frames.has_animation(anim_name):
-		_hair.play(anim_name)
+	_update_head_anchor()
 
 
 func set_look_direction(world_dir: Vector2) -> void:
@@ -155,25 +159,33 @@ func _load_sprites() -> void:
 		_body.sprite_frames = body_frames
 		_body.play("idle")
 		_update_held_item_anchor()
-	_hair.visible = false
 	_face.visible = false
-	_setup_face()
+	_setup_head_layers()
+	_refresh_hair_visual()
 
 
-func _setup_face() -> void:
-	if _face_anchor == null:
-		_face_anchor = Node2D.new()
-		_face_anchor.name = "FaceAnchor"
-		add_child(_face_anchor)
-		# Face must render above body/hair but below held item
+func _setup_head_layers() -> void:
+	if _head_anchor == null:
+		_head_anchor = Node2D.new()
+		_head_anchor.name = "HeadAnchor"
+		add_child(_head_anchor)
+		# Head layers must render above the body but below the held item.
 		if _held_item_anchor != null:
-			move_child(_face_anchor, _held_item_anchor.get_index())
+			move_child(_head_anchor, _held_item_anchor.get_index())
+	if _hair != null and _hair.get_parent() != _head_anchor:
+		var hair_parent := _hair.get_parent()
+		if hair_parent != null:
+			hair_parent.remove_child(_hair)
+		_head_anchor.add_child(_hair)
+	_hair.centered = true
+	_hair.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_hair.position = _profile.hair_local_offset
 	if _eye_sprite == null:
 		_eye_sprite = Sprite2D.new()
 		_eye_sprite.name = "EyeSprite"
 		_eye_sprite.centered = true
 		_eye_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-		_face_anchor.add_child(_eye_sprite)
+		_head_anchor.add_child(_eye_sprite)
 	var eye_texture := _load_texture(_profile.eye_path)
 	if eye_texture != null:
 		_eye_sprite.texture = eye_texture
@@ -185,7 +197,7 @@ func _setup_face() -> void:
 		_mouth_sprite.name = "MouthSprite"
 		_mouth_sprite.centered = true
 		_mouth_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-		_face_anchor.add_child(_mouth_sprite)
+		_head_anchor.add_child(_mouth_sprite)
 	var mouth_texture := _load_texture(_profile.mouth_path)
 	if mouth_texture != null:
 		_mouth_sprite.texture = mouth_texture
@@ -193,17 +205,17 @@ func _setup_face() -> void:
 		_mouth_sprite.region_rect = Rect2(0, 0, _profile.mouth_frame_width, _profile.mouth_frame_height)
 	_mouth_sprite.position = _profile.mouth_local_offset
 	_mouth_sprite.scale.x = scale.x
-	_update_face_anchor()
+	_update_head_anchor()
 
 
-func _update_face_anchor() -> void:
-	if _face_anchor == null:
+func _update_head_anchor() -> void:
+	if _head_anchor == null:
 		return
 	var anim_name: String = (
 		_current_animation if not _current_animation.is_empty() else String(_body.animation)
 	)
 	var frame_index: int = _body.frame if _body != null else 0
-	_face_anchor.position = _profile.get_face_offset(anim_name, frame_index)
+	_head_anchor.position = _profile.get_head_offset(anim_name, frame_index)
 
 
 func _set_eye_frame(frame: int) -> void:
@@ -254,6 +266,24 @@ func _load_texture(texture_path: String) -> Texture2D:
 	if not ResourceLoader.exists(texture_path):
 		return null
 	return load(texture_path) as Texture2D
+
+
+func _refresh_hair_visual() -> void:
+	if _hair == null:
+		return
+	_hair.position = _profile.hair_local_offset
+	var hair_path := _profile.get_hair_path(
+		String(_appearance.get("hair_style_id", CHARACTER_APPEARANCE.DEFAULT_HAIR_STYLE_ID))
+	)
+	_hair.texture = _load_texture(hair_path)
+	_refresh_head_layer_visibility()
+
+
+func _refresh_head_layer_visibility() -> void:
+	if _hair == null:
+		return
+	var headgear_equipped := _current_head_item_id != ITEM_PROPERTIES.NONE
+	_hair.visible = _hair.texture != null and not headgear_equipped
 
 
 func _ensure_held_item_sprite() -> void:
@@ -312,6 +342,13 @@ func _apply_held_item_id(item_id: int) -> void:
 		return
 	_current_held_item_id = item_id
 	_refresh_held_item_visual()
+
+
+func _apply_head_item_id(item_id: int) -> void:
+	if _current_head_item_id == item_id:
+		return
+	_current_head_item_id = item_id
+	_refresh_head_layer_visibility()
 
 
 func _refresh_held_item_visual() -> void:

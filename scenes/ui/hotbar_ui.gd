@@ -28,6 +28,7 @@ var _style_selected: StyleBoxFlat
 var _style_container: StyleBoxFlat
 var _hotbar_actions: Array[StringName] = []
 var _is_open: bool = false
+var _session_bindings_initialized: bool = false
 var _held_preview_panel: PanelContainer
 var _held_preview_icon: TextureRect
 var _held_preview_count: Label
@@ -55,6 +56,8 @@ var _last_pickup_item_id: int = ItemProperties.NONE
 func setup_session(block_interaction: Node2D, inventory_manager: Node) -> void:
 	_block_interaction = block_interaction
 	_inventory_manager = inventory_manager
+	if is_node_ready():
+		_try_initialize_session_bindings()
 
 
 func _ready() -> void:
@@ -71,21 +74,29 @@ func _ready() -> void:
 	_configure_inventory_panel()
 	_build_held_preview()
 	_register_world_input_blockers()
+	_try_initialize_session_bindings()
 
+
+func _try_initialize_session_bindings() -> void:
+	if _session_bindings_initialized:
+		return
 	if _block_interaction == null:
+		_block_interaction = get_parent().get_node_or_null("BlockInteraction")
+	if _block_interaction == null or _inventory_manager == null:
+		return
+	if _slot_panels.size() < GameConstants.HOTBAR_SIZE:
+		return
+	if _slot_panels[0] == null:
 		return
 
 	_selected_index = _block_interaction.selected_hotbar_slot
 	_refresh_selection()
-
-	if _inventory_manager == null:
-		return
-
 	_inventory_manager.local_slot_changed.connect(_on_slot_changed)
 	_inventory_manager.local_inventory_synced.connect(_refresh_all_slots)
 	_inventory_manager.local_held_slot_changed.connect(_refresh_held_preview)
 	_refresh_all_slots()
 	_refresh_held_preview()
+	_session_bindings_initialized = true
 
 
 func _process(_delta: float) -> void:

@@ -18,7 +18,7 @@ var world_seed: int = 0
 
 @onready var terrain_layer: TileMapLayer = $TerrainLayer
 @onready var base_visual_layer: TileMapLayer = $BaseVisualLayer
-@onready var plant_layer: TileMapLayer = $PlantLayer
+@onready var decor_layer: TileMapLayer = $DepthSorted/DecorLayer
 @onready var chunk_manager: Node = $ChunkManager
 @onready var structure_manager: Node = $StructureManager
 @onready var depth_sorted: Node2D = $DepthSorted
@@ -32,7 +32,7 @@ func _ready() -> void:
 			self,
 			terrain_layer,
 			base_visual_layer,
-			plant_layer,
+			decor_layer,
 			depth_sorted,
 			players_node
 		)
@@ -47,17 +47,19 @@ func initialize(seed_value: int) -> void:
 	noise.frequency = 0.05
 	noise.seed = seed_value
 	_diagnose_and_fix_physics()
-	_setup_vegetation_sway_shader()
+	_setup_decor_layer()
 
 
-func _setup_vegetation_sway_shader() -> void:
+func _setup_decor_layer() -> void:
 	var shader := load("res://assets/shaders/vegetation_sway.gdshader") as Shader
 	if shader == null:
 		return
 	var mat := ShaderMaterial.new()
 	mat.shader = shader
 	mat.set_shader_parameter("tile_size", float(GameConstants.TILE_SIZE))
-	plant_layer.material = mat
+	decor_layer.y_sort_enabled = true
+	decor_layer.y_sort_origin = GameConstants.TILE_SIZE
+	decor_layer.material = mat
 
 
 ## Generates a ChunkData for the given chunk coordinate.
