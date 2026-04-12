@@ -1,40 +1,72 @@
 class_name ChunkData
 extends Resource
 ## Data structure for a single 16x16 chunk of the world.
-## Stores base terrain tiles and player modifications separately
-## for compact serialization (only changes need saving).
+## Each cell holds two independent tile slots:
+##   ground — the floor (GroundTileProperties ID, -1 = void/chasm)
+##   top    — what sits on the floor (TileProperties ID, -1 = empty)
+## Player modifications override base tiles per layer independently.
+## Only modifications are saved to disk; base tiles are regenerated from noise.
 
 ## Chunk coordinate in chunk-space (not tile-space).
 var chunk_coord: Vector2i
 
-## Base terrain tiles generated from noise — flat array of 256 ints (16x16).
-## Index = y * CHUNK_SIZE + x. Value = tile atlas index (-1 = empty).
-var base_tiles: PackedInt32Array
+## Ground-layer base tiles — flat array of 256 ints (16x16).
+## Index = y * CHUNK_SIZE + x. Value = GroundTileProperties ID (-1 = void).
+var ground_base_tiles: PackedInt32Array
 
-## Player modifications on top of base terrain. Key = local tile index, Value = tile atlas index.
-## -1 means the tile was removed (dug out).
-var modifications: Dictionary = {}
+## Top-layer base tiles — flat array of 256 ints (16x16).
+## Value = TileProperties ID (-1 = empty).
+var top_base_tiles: PackedInt32Array
+
+## Player modifications to the ground layer. Key = local tile index, Value = GroundTileProperties ID.
+var ground_modifications: Dictionary = {}
+
+## Player modifications to the top layer. Key = local tile index, Value = TileProperties ID.
+var top_modifications: Dictionary = {}
 
 
 func _init(coord: Vector2i = Vector2i.ZERO) -> void:
 	chunk_coord = coord
-	base_tiles = PackedInt32Array()
-	base_tiles.resize(GameConstants.CHUNK_SIZE * GameConstants.CHUNK_SIZE)
-	base_tiles.fill(-1)
+	var size: int = GameConstants.CHUNK_SIZE * GameConstants.CHUNK_SIZE
+	ground_base_tiles = PackedInt32Array()
+	ground_base_tiles.resize(size)
+	ground_base_tiles.fill(-1)
+	top_base_tiles = PackedInt32Array()
+	top_base_tiles.resize(size)
+	top_base_tiles.fill(-1)
 
 
-## Returns the effective tile at a local position (modification overrides base).
-func get_tile(local_x: int, local_y: int) -> int:
+## Returns the effective ground tile at a local position (modification overrides base).
+func get_ground_tile(local_x: int, local_y: int) -> int:
 	var idx: int = local_y * GameConstants.CHUNK_SIZE + local_x
-	if modifications.has(idx):
-		return modifications[idx]
-	return base_tiles[idx]
+	if ground_modifications.has(idx):
+		return ground_modifications[idx]
+	return ground_base_tiles[idx]
 
 
-## Records a player modification at a local position.
-func set_modification(local_x: int, local_y: int, tile_id: int) -> void:
+## Returns the effective top tile at a local position (modification overrides base).
+func get_top_tile(local_x: int, local_y: int) -> int:
 	var idx: int = local_y * GameConstants.CHUNK_SIZE + local_x
-	modifications[idx] = tile_id
+	if top_modifications.has(idx):
+		return top_modifications[idx]
+	return top_base_tiles[idx]
+
+
+## Records a player modification to the top layer at a local position.
+func set_top_modification(local_x: int, local_y: int, tile_id: int) -> void:
+	var idx: int = local_y * GameConstants.CHUNK_SIZE + local_x
+	top_modifications[idx] = tile_id
+
+
+## Records a player modification to the ground layer at a local position.
+func set_ground_modification(local_x: int, local_y: int, ground_id: int) -> void:
+	var idx: int = local_y * GameConstants.CHUNK_SIZE + local_x
+	ground_modifications[idx] = ground_id
+
+
+## Returns true if either layer has player modifications.
+func has_any_modifications() -> bool:
+	return not top_modifications.is_empty() or not ground_modifications.is_empty()
 
 
 ## Serializes chunk data into a PackedByteArray for network transfer.
@@ -42,8 +74,10 @@ func serialize() -> PackedByteArray:
 	var data: Dictionary = {
 		"cx": chunk_coord.x,
 		"cy": chunk_coord.y,
-		"base": base_tiles,
-		"mods": modifications,
+		"ground": ground_base_tiles,
+		"top": top_base_tiles,
+		"ground_mods": ground_modifications,
+		"top_mods": top_modifications,
 	}
 	return var_to_bytes(data)
 
@@ -52,6 +86,8 @@ func serialize() -> PackedByteArray:
 static func deserialize(bytes: PackedByteArray) -> ChunkData:
 	var data: Dictionary = bytes_to_var(bytes)
 	var chunk := ChunkData.new(Vector2i(data["cx"], data["cy"]))
-	chunk.base_tiles = data["base"]
-	chunk.modifications = data["mods"]
+	chunk.ground_base_tiles = data["ground"]
+	chunk.top_base_tiles = data["top"]
+	chunk.ground_modifications = data.get("ground_mods", {})
+	chunk.top_modifications = data.get("top_mods", {})
 	return chunk

@@ -159,7 +159,7 @@ func _is_mouse_over_world_blocking_ui() -> bool:
 
 func _has_breakable_target(coord: Vector2i) -> bool:
 	if _chunk_manager != null:
-		var tile_id: int = _chunk_manager.get_tile_at(coord)
+		var tile_id: int = _chunk_manager.get_top_tile_at(coord)
 		if tile_id != TileProperties.EMPTY:
 			var props: TileProperties = TileProperties.get_properties(tile_id)
 			if props != null and props.breakable:

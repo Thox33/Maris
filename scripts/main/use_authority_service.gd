@@ -200,7 +200,7 @@ func _build_damaged_target(target: Dictionary) -> Dictionary:
 
 func _resolve_break_target(coord: Vector2i) -> Dictionary:
 	if chunk_manager != null:
-		var tile_id := int(chunk_manager.get_tile_at(coord))
+		var tile_id := int(chunk_manager.get_top_tile_at(coord))
 		if tile_id != TileProperties.EMPTY:
 			var tile_props := TileProperties.get_properties(tile_id)
 			if tile_props != null and tile_props.breakable:
@@ -262,7 +262,7 @@ func _complete_break_target(target_state: Dictionary) -> void:
 func _does_target_exist(target_state: Dictionary) -> bool:
 	var kind := String(target_state.get("kind", ""))
 	if kind == TARGET_KIND_TILE and chunk_manager != null:
-		var tile_id := int(chunk_manager.get_tile_at(target_state.get("coord", Vector2i.ZERO) as Vector2i))
+		var tile_id := int(chunk_manager.get_top_tile_at(target_state.get("coord", Vector2i.ZERO) as Vector2i))
 		return tile_id != TileProperties.EMPTY
 	if kind == TARGET_KIND_STRUCTURE and structure_manager != null:
 		return structure_manager.has_structure_instance(

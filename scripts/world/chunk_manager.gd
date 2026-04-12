@@ -11,6 +11,9 @@ const DEBUG_LOG: bool = false
 ## Reference to the parent WorldGenerator (set by setup()).
 var world_generator: Node2D
 
+## Ground-layer TileMapLayer — renders the base floor behind everything.
+var ground_layer: TileMapLayer
+
 ## Reference to the global TileMapLayer.
 var terrain_layer: TileMapLayer
 var base_visual_layer: TileMapLayer
@@ -37,6 +40,7 @@ var _unload_queue: Array[Vector2i] = []
 
 func setup(
 	p_world_generator: Node2D,
+	p_ground_layer: TileMapLayer,
 	p_terrain_layer: TileMapLayer,
 	p_base_visual_layer: TileMapLayer,
 	p_decor_layer: TileMapLayer,
@@ -44,6 +48,7 @@ func setup(
 	p_players_node: Node,
 ) -> void:
 	world_generator = p_world_generator
+	ground_layer = p_ground_layer
 	terrain_layer = p_terrain_layer
 	base_visual_layer = p_base_visual_layer
 	decor_layer = p_decor_layer
@@ -171,9 +176,9 @@ func _apply_chunk(chunk: ChunkData) -> void:
 
 	for local_y in range(GameConstants.CHUNK_SIZE):
 		for local_x in range(GameConstants.CHUNK_SIZE):
-			var tile_id: int = chunk.get_tile(local_x, local_y)
 			var cell := Vector2i(origin_x + local_x, origin_y + local_y)
-			_apply_cell(cell, tile_id)
+			_apply_ground_cell(cell, chunk.get_ground_tile(local_x, local_y))
+			_apply_cell(cell, chunk.get_top_tile(local_x, local_y))
 
 
 ## Erases a chunk's tiles from the TileMapLayer and removes it from the cache.
@@ -191,6 +196,8 @@ func _erase_chunk(coord: Vector2i) -> void:
 	for local_y in range(GameConstants.CHUNK_SIZE):
 		for local_x in range(GameConstants.CHUNK_SIZE):
 			var cell := Vector2i(origin_x + local_x, origin_y + local_y)
+			if ground_layer != null:
+				ground_layer.erase_cell(cell)
 			terrain_layer.erase_cell(cell)
 			base_visual_layer.erase_cell(cell)
 			decor_layer.erase_cell(cell)
@@ -202,9 +209,11 @@ func _erase_chunk(coord: Vector2i) -> void:
 ## Generates a chunk from noise and restores any saved modifications from disk.
 func _generate_and_restore(coord: Vector2i) -> ChunkData:
 	var chunk: ChunkData = world_generator.generate_chunk(coord)
-	var saved_mods: Dictionary = SaveManager.load_chunk_modifications(coord)
-	if not saved_mods.is_empty():
-		chunk.modifications = saved_mods
+	var saved: Dictionary = SaveManager.load_chunk_modifications(coord)
+	if saved.has("top"):
+		chunk.top_modifications = saved["top"]
+	if saved.has("ground"):
+		chunk.ground_modifications = saved["ground"]
 	return chunk
 
 
@@ -256,7 +265,7 @@ func _receive_chunk(data: PackedByteArray) -> void:
 ## Called locally by BlockInteraction when a tile is fully broken.
 func break_tile(coord: Vector2i) -> void:
 	if multiplayer.is_server():
-		var tile_id: int = get_tile_at(coord)
+		var tile_id: int = get_top_tile_at(coord)
 		_do_break_tile(coord)
 		_sync_break_tile.rpc(coord.x, coord.y)
 		GameEvents.block_broken.emit(coord, tile_id)
@@ -264,7 +273,7 @@ func break_tile(coord: Vector2i) -> void:
 		_request_break_tile.rpc_id(1, coord.x, coord.y)
 
 
-## Erases a single tile and records the modification in chunk data.
+## Erases a top tile and records the modification in chunk data.
 func _do_break_tile(coord: Vector2i) -> void:
 	var chunk_x: int = floori(float(coord.x) / GameConstants.CHUNK_SIZE)
 	var chunk_y: int = floori(float(coord.y) / GameConstants.CHUNK_SIZE)
@@ -273,7 +282,7 @@ func _do_break_tile(coord: Vector2i) -> void:
 		var local_x: int = coord.x - chunk_x * GameConstants.CHUNK_SIZE
 		var local_y: int = coord.y - chunk_y * GameConstants.CHUNK_SIZE
 		var chunk: ChunkData = loaded_chunks[chunk_coord]
-		chunk.set_modification(local_x, local_y, -1)
+		chunk.set_top_modification(local_x, local_y, -1)
 
 	_apply_cell(coord, TileProperties.EMPTY)
 
@@ -284,7 +293,7 @@ func _request_break_tile(tx: int, ty: int) -> void:
 	if not multiplayer.is_server():
 		return
 	var coord := Vector2i(tx, ty)
-	var tile_id: int = get_tile_at(coord)
+	var tile_id: int = get_top_tile_at(coord)
 	if tile_id == TileProperties.EMPTY:
 		return
 
@@ -297,7 +306,7 @@ func _request_break_tile(tx: int, ty: int) -> void:
 @rpc("authority", "reliable")
 func _sync_break_tile(tx: int, ty: int) -> void:
 	var coord := Vector2i(tx, ty)
-	var tile_id: int = get_tile_at(coord)
+	var tile_id: int = get_top_tile_at(coord)
 	_do_break_tile(coord)
 	GameEvents.block_broken.emit(coord, tile_id)
 
@@ -305,9 +314,14 @@ func _sync_break_tile(tx: int, ty: int) -> void:
 # --- Block placing ---
 
 
-## Returns true if a tile coordinate has no block (is empty water).
+## Returns true if a top tile can be placed at this coordinate.
+## Requires: top layer is empty AND ground layer is solid (not void/liquid).
 func is_cell_empty(coord: Vector2i) -> bool:
-	return get_tile_at(coord) == TileProperties.EMPTY
+	if get_top_tile_at(coord) != TileProperties.EMPTY:
+		return false
+	var ground_id: int = get_ground_tile_at(coord)
+	var ground_props := GroundTileProperties.get_properties(ground_id)
+	return ground_props != null and ground_props.is_solid
 
 
 ## Server-only: places a tile and syncs to all clients.
@@ -326,7 +340,7 @@ func _do_place_tile(coord: Vector2i, tile_id: int) -> void:
 	if props == null:
 		return
 
-	# Record modification in chunk data.
+	# Record modification in top layer chunk data.
 	var chunk_x: int = floori(float(coord.x) / GameConstants.CHUNK_SIZE)
 	var chunk_y: int = floori(float(coord.y) / GameConstants.CHUNK_SIZE)
 	var chunk_coord := Vector2i(chunk_x, chunk_y)
@@ -334,7 +348,7 @@ func _do_place_tile(coord: Vector2i, tile_id: int) -> void:
 		var local_x: int = coord.x - chunk_x * GameConstants.CHUNK_SIZE
 		var local_y: int = coord.y - chunk_y * GameConstants.CHUNK_SIZE
 		var chunk: ChunkData = loaded_chunks[chunk_coord]
-		chunk.set_modification(local_x, local_y, tile_id)
+		chunk.set_top_modification(local_x, local_y, tile_id)
 
 	_apply_cell(coord, tile_id)
 
@@ -375,7 +389,7 @@ func _apply_cell(cell: Vector2i, tile_id: int) -> void:
 
 
 func _sync_tall_structure_visual(coord: Vector2i) -> void:
-	var tile_id: int = get_tile_at(coord)
+	var tile_id: int = get_top_tile_at(coord)
 	var props := TileProperties.get_properties(tile_id)
 	if props == null or not props.uses_node_based_world_visual():
 		_erase_tall_structure_visual(coord)
@@ -410,19 +424,42 @@ func _erase_tall_structure_visual(coord: Vector2i) -> void:
 	visual.queue_free()
 
 
+## Places or erases a single cell on the ground layer.
+func _apply_ground_cell(cell: Vector2i, ground_id: int) -> void:
+	if ground_layer == null:
+		return
+	var props := GroundTileProperties.get_properties(ground_id)
+	if props == null:
+		ground_layer.erase_cell(cell)
+	else:
+		ground_layer.set_cell(cell, 0, props.atlas_coord)
+
+
 func _cell_key(coord: Vector2i) -> String:
 	return "%s:%s" % [coord.x, coord.y]
 
 
-## Returns the tile ID at a world-space tile coordinate from chunk data.
-func get_tile_at(coord: Vector2i) -> int:
+## Returns the top tile ID at a world-space tile coordinate from chunk data.
+func get_top_tile_at(coord: Vector2i) -> int:
 	var chunk_x: int = floori(float(coord.x) / GameConstants.CHUNK_SIZE)
 	var chunk_y: int = floori(float(coord.y) / GameConstants.CHUNK_SIZE)
 	var chunk_coord := Vector2i(chunk_x, chunk_y)
 	var chunk: ChunkData = loaded_chunks.get(chunk_coord)
 	if chunk == null:
 		return TileProperties.EMPTY
-
 	var local_x: int = coord.x - chunk_x * GameConstants.CHUNK_SIZE
 	var local_y: int = coord.y - chunk_y * GameConstants.CHUNK_SIZE
-	return chunk.get_tile(local_x, local_y)
+	return chunk.get_top_tile(local_x, local_y)
+
+
+## Returns the ground tile ID at a world-space tile coordinate from chunk data.
+func get_ground_tile_at(coord: Vector2i) -> int:
+	var chunk_x: int = floori(float(coord.x) / GameConstants.CHUNK_SIZE)
+	var chunk_y: int = floori(float(coord.y) / GameConstants.CHUNK_SIZE)
+	var chunk_coord := Vector2i(chunk_x, chunk_y)
+	var chunk: ChunkData = loaded_chunks.get(chunk_coord)
+	if chunk == null:
+		return GroundTileProperties.EMPTY
+	var local_x: int = coord.x - chunk_x * GameConstants.CHUNK_SIZE
+	var local_y: int = coord.y - chunk_y * GameConstants.CHUNK_SIZE
+	return chunk.get_ground_tile(local_x, local_y)

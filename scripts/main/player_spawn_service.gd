@@ -2,7 +2,8 @@ extends Node
 
 const PLAYER_SCENE := preload("res://scenes/player/player.tscn")
 const CHARACTER_APPEARANCE := preload("res://scripts/actor/character_appearance.gd")
-const SPAWN_TILE := Vector2i(0, 4)
+const SPAWN_SEARCH_X := 0
+const SPAWN_SEARCH_Y_RANGE := 40
 
 var world: Node2D
 var players_node: Node
@@ -68,10 +69,26 @@ func create_player(data: Dictionary) -> Node:
 
 
 func get_spawn_position() -> Vector2:
-	return Vector2(
-		SPAWN_TILE.x * GameConstants.TILE_SIZE + GameConstants.TILE_SIZE / 2.0,
-		SPAWN_TILE.y * GameConstants.TILE_SIZE + GameConstants.TILE_SIZE / 2.0
-	)
+	return _find_clear_spawn()
+
+
+## Scans downward from (SPAWN_SEARCH_X, 0) for a cell with solid ground and no top tile.
+## Assumes chunks around the origin are already loaded.
+func _find_clear_spawn() -> Vector2:
+	var cm: Node = world.chunk_manager if world != null else null
+	if cm != null:
+		for y in range(-SPAWN_SEARCH_Y_RANGE, SPAWN_SEARCH_Y_RANGE):
+			var coord := Vector2i(SPAWN_SEARCH_X, y)
+			var ground_id: int = cm.get_ground_tile_at(coord)
+			var ground_props := GroundTileProperties.get_properties(ground_id)
+			if ground_props != null and ground_props.is_solid:
+				if cm.get_top_tile_at(coord) == TileProperties.EMPTY:
+					return Vector2(
+						coord.x * GameConstants.TILE_SIZE + GameConstants.TILE_SIZE / 2.0,
+						coord.y * GameConstants.TILE_SIZE + GameConstants.TILE_SIZE / 2.0
+					)
+	# Fallback: origin.
+	return Vector2(GameConstants.TILE_SIZE / 2.0, GameConstants.TILE_SIZE / 2.0)
 
 
 func complete_join(peer_id: int, player_record: Dictionary) -> void:
@@ -87,11 +104,15 @@ func complete_join(peer_id: int, player_record: Dictionary) -> void:
 	var appearance := CHARACTER_APPEARANCE.normalize_appearance(character.get("appearance", {}))
 	NetworkManager.set_player_character_name(peer_id, character_name)
 
-	var pos := get_spawn_position()
+	var pos: Vector2
 	if progress.has("x") and progress.has("y"):
 		pos = Vector2(progress["x"], progress["y"])
-
-	world.chunk_manager.load_chunks_around(pos)
+		world.chunk_manager.load_chunks_around(pos)
+	else:
+		# Load chunks around origin first so the spawn scan has tile data available.
+		var origin := Vector2(GameConstants.TILE_SIZE / 2.0, GameConstants.TILE_SIZE / 2.0)
+		world.chunk_manager.load_chunks_around(origin)
+		pos = get_spawn_position()
 	world.structure_manager.sync_full_state_to_peer(peer_id)
 
 	var player_id := str(peer_id)

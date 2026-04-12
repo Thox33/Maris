@@ -187,7 +187,7 @@ func _get_tile_speed_factor() -> float:
 		floori(global_position.x / GameConstants.TILE_SIZE),
 		floori(global_position.y / GameConstants.TILE_SIZE),
 	)
-	var tile_id: int = _chunk_manager.get_tile_at(tile_coord)
+	var tile_id: int = _chunk_manager.get_top_tile_at(tile_coord)
 	if tile_id == TileProperties.EMPTY:
 		return 1.0
 

@@ -16,6 +16,7 @@ static var collision_polygon := PackedVector2Array(
 var noise := FastNoiseLite.new()
 var world_seed: int = 0
 
+@onready var ground_layer: TileMapLayer = $GroundLayer
 @onready var terrain_layer: TileMapLayer = $TerrainLayer
 @onready var base_visual_layer: TileMapLayer = $BaseVisualLayer
 @onready var decor_layer: TileMapLayer = $DepthSorted/DecorLayer
@@ -30,6 +31,7 @@ func _ready() -> void:
 	if chunk_manager != null and chunk_manager.has_method("setup"):
 		chunk_manager.setup(
 			self,
+			ground_layer,
 			terrain_layer,
 			base_visual_layer,
 			decor_layer,
@@ -48,6 +50,29 @@ func initialize(seed_value: int) -> void:
 	noise.seed = seed_value
 	_diagnose_and_fix_physics()
 	_setup_decor_layer()
+	_setup_ground_layer()
+
+
+## Builds a runtime TileSet for the GroundLayer from ground_tiles.png.
+## Each GroundTileProperties entry maps to a 16x16 cell at its atlas_coord.
+func _setup_ground_layer() -> void:
+	if ground_layer == null:
+		return
+	var texture := load("res://assets/tilesets/ground_tiles.png") as Texture2D
+	if texture == null:
+		push_warning("[WorldGenerator] ground_tiles.png not found — run generate_ground_atlas.gd first.")
+		return
+	var source := TileSetAtlasSource.new()
+	source.texture = texture
+	source.texture_region_size = Vector2i(GameConstants.TILE_SIZE, GameConstants.TILE_SIZE)
+	# Register every tile in the atlas so Godot allows set_cell() with those coords.
+	for ground_id: int in GroundTileProperties.registry:
+		var props := GroundTileProperties.get_properties(ground_id)
+		source.create_tile(props.atlas_coord)
+	var tile_set := TileSet.new()
+	tile_set.tile_size = Vector2i(GameConstants.TILE_SIZE, GameConstants.TILE_SIZE)
+	tile_set.add_source(source)
+	ground_layer.tile_set = tile_set
 
 
 func _setup_decor_layer() -> void:
@@ -72,8 +97,9 @@ func generate_chunk(coord: Vector2i) -> ChunkData:
 		for local_x in range(GameConstants.CHUNK_SIZE):
 			var world_x: int = origin_x + local_x
 			var world_y: int = origin_y + local_y
-			var tile_id: int = _get_tile_for_position(world_x, world_y)
-			chunk.base_tiles[local_y * GameConstants.CHUNK_SIZE + local_x] = tile_id
+			var idx: int = local_y * GameConstants.CHUNK_SIZE + local_x
+			chunk.ground_base_tiles[idx] = _get_ground_tile_for_position(world_x, world_y)
+			chunk.top_base_tiles[idx] = _get_top_tile_for_position(world_x, world_y)
 
 	return chunk
 
@@ -132,8 +158,30 @@ func _diagnose_and_fix_physics() -> void:
 		print("[Physics] All good — no fixes needed")
 
 
-## Returns the tile type index for a world-space tile position.
-func _get_tile_for_position(x: int, y: int) -> int:
+## Returns the ground tile ID for a world-space tile position.
+## Picks a deterministic visual variant per cell so neighboring tiles differ slightly.
+func _get_ground_tile_for_position(x: int, y: int) -> int:
+	var n: float = noise.get_noise_2d(float(x), float(y))
+	var depth_ratio: float = float(y) / float(GameConstants.WORLD_SCALE)
+	var density: float = n + (depth_ratio * 1.5 - 0.5)
+
+	var base_name: String
+	if density > 0.6:
+		base_name = "stone"
+	elif density > 0.0:
+		base_name = "dirt"
+	else:
+		base_name = "sand"
+
+	var group: Array = GroundTileProperties.variants[base_name]
+	var variant_index: int = absi(x * 31 + y * 97) % group.size()
+	return group[variant_index]
+
+
+## Returns the top tile ID for a world-space tile position.
+## Solid blocks (stone, sand) form the natural terrain obstacles.
+## Vegetation spawns in sparse open areas.
+func _get_top_tile_for_position(x: int, y: int) -> int:
 	var n: float = noise.get_noise_2d(float(x), float(y))
 	var depth_ratio: float = float(y) / float(GameConstants.WORLD_SCALE)
 	var density: float = n + (depth_ratio * 1.5 - 0.5)
@@ -143,8 +191,8 @@ func _get_tile_for_position(x: int, y: int) -> int:
 	if density > 0.3:
 		return TileProperties.by_name["sand"]
 	if density > 0.2 and n > 0.1:
-		# Pick a deterministic coral variant based on position.
-		var variants := TileProperties.coral_variants
+		# Deterministic decor variant based on position.
+		var variants := TileProperties.decor_variants
 		var variant_index: int = absi(x * 73 + y * 137) % variants.size()
 		return variants[variant_index]
 	return TileProperties.EMPTY

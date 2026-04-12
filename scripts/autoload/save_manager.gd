@@ -13,7 +13,8 @@ const CHARACTER_APPEARANCE := preload("res://scripts/actor/character_appearance.
 
 ## Current save format version. Bump when the on-disk format changes,
 ## then add migration logic in _migrate_world_meta().
-const SAVE_VERSION: int = 1
+## v2: chunk saves split into {"top": ..., "ground": ...} dicts (ground/top layer model).
+const SAVE_VERSION: int = 2
 
 ## Emitted on the server when an auto-save tick fires.
 ## Main connects to this to orchestrate saving all systems.
@@ -102,18 +103,20 @@ func load_world_meta() -> Dictionary:
 # --- Chunk persistence ---
 
 
-## Saves only the modifications dict for a chunk (base tiles are regenerated).
+## Saves top and ground modifications for a chunk (base tiles are regenerated).
 ## Deletes the save file if the chunk has no modifications (keeps disk clean).
 func save_chunk(coord: Vector2i, chunk: ChunkData) -> void:
 	var path := _chunk_path(coord)
-	if chunk.modifications.is_empty():
+	if not chunk.has_any_modifications():
 		if FileAccess.file_exists(path):
 			DirAccess.remove_absolute(path)
 		return
-	_write_bytes(path, var_to_bytes(chunk.modifications))
+	var data := {"top": chunk.top_modifications, "ground": chunk.ground_modifications}
+	_write_bytes(path, var_to_bytes(data))
 
 
 ## Loads chunk modifications from disk. Returns empty Dictionary if none saved.
+## Format: {"top": {index: tile_id, ...}, "ground": {index: ground_id, ...}}
 func load_chunk_modifications(coord: Vector2i) -> Dictionary:
 	var path := _chunk_path(coord)
 	if not FileAccess.file_exists(path):
@@ -132,7 +135,7 @@ func save_all_chunks(loaded_chunks: Dictionary) -> void:
 	var saved_count: int = 0
 	for coord: Vector2i in loaded_chunks:
 		var chunk: ChunkData = loaded_chunks[coord]
-		if chunk != null and not chunk.modifications.is_empty():
+		if chunk != null and chunk.has_any_modifications():
 			save_chunk(coord, chunk)
 			saved_count += 1
 	if saved_count > 0:

@@ -201,10 +201,14 @@ func _on_slot_gui_input(slot_index: int, event: InputEvent) -> void:
 			_cancel_left_pointer_state()
 			_clear_preview()
 			_request_inventory_action("quick_transfer", slot_index)
-		elif mouse_event.double_click and _can_pickup_matching_from_same_slot(slot_index):
-			_cancel_left_pointer_state()
-			_clear_preview()
-			_request_pickup_matching_item(_last_pickup_item_id)
+		elif mouse_event.double_click:
+			var matching_item_id: int = _get_double_click_pickup_item_id(slot_index)
+			if matching_item_id != ItemProperties.NONE:
+				_cancel_left_pointer_state()
+				_clear_preview()
+				_request_pickup_matching_item(matching_item_id)
+			else:
+				_begin_left_press(slot_index, mouse_event.position)
 		else:
 			_begin_left_press(slot_index, mouse_event.position)
 		get_viewport().set_input_as_handled()
@@ -358,12 +362,25 @@ func _append_drag_distribute_slot(slot_index: int) -> void:
 	_drag_distribute_slots.append(slot_index)
 
 
-func _can_pickup_matching_from_same_slot(slot_index: int) -> bool:
-	if slot_index != _last_pickup_slot_index:
-		return false
-	if not _has_local_held_slot():
-		return false
-	return _inventory_manager.local_held_slot.get("item_id", ItemProperties.NONE) == _last_pickup_item_id
+func _get_double_click_pickup_item_id(slot_index: int) -> int:
+	if _inventory_manager == null or _inventory_manager.local_inventory == null:
+		return ItemProperties.NONE
+	if slot_index < 0 or slot_index >= _inventory_manager.local_inventory.size:
+		return ItemProperties.NONE
+
+	var slot: Dictionary = _inventory_manager.local_inventory.get_slot(slot_index)
+	var slot_item_id: int = slot.get("item_id", ItemProperties.NONE)
+	var held_item_id: int = _inventory_manager.local_held_slot.get("item_id", ItemProperties.NONE)
+
+	if held_item_id != ItemProperties.NONE:
+		if slot_item_id == ItemProperties.NONE or slot_item_id == held_item_id:
+			return held_item_id
+		return ItemProperties.NONE
+
+	if slot_index == _last_pickup_slot_index and slot_item_id == _last_pickup_item_id:
+		return slot_item_id
+
+	return ItemProperties.NONE
 
 
 func _get_display_slot(index: int) -> Dictionary:

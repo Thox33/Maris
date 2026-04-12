@@ -67,7 +67,7 @@ static var by_name: Dictionary = {
 }
 
 ## All coral tile IDs for random selection during world generation.
-static var coral_variants: Array[int] = [2, 3, 4, 5, 6, 7]
+static var decor_variants: Array[int] = [2, 3, 4, 5, 6, 7]
 
 ## Stable integer ID (never reuse a removed ID).
 var id: int
