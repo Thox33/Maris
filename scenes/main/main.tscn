@@ -5,7 +5,6 @@
 [ext_resource type="Script" uid="uid://vx7l26nr2mjp" path="res://scenes/main/inventory_manager.gd" id="3"]
 [ext_resource type="PackedScene" path="res://scenes/ui/session_menu.tscn" id="4"]
 [ext_resource type="Script" uid="uid://bf1au0mv37n5t" path="res://scripts/main/screen_effects.gd" id="5"]
-[ext_resource type="Shader" uid="uid://3cyqkvao8lmj" path="res://assets/shaders/underwater.gdshader" id="6"]
 [ext_resource type="Script" path="res://scripts/ui/overhead_manager.gd" id="7"]
 [ext_resource type="Script" path="res://scripts/main/session_bootstrap_service.gd" id="8"]
 [ext_resource type="Script" path="res://scripts/main/session_join_service.gd" id="9"]
@@ -18,13 +17,6 @@
 [ext_resource type="Script" path="res://scripts/main/world_placement_service.gd" id="16"]
 [ext_resource type="Script" path="res://scripts/main/use_authority_service.gd" id="17"]
 [ext_resource type="Script" path="res://scripts/main/break_visual_service.gd" id="18"]
-
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_underwater"]
-shader = ExtResource("6")
-shader_parameter/wave_speed = 0.8
-shader_parameter/wave_strength = 1.5
-shader_parameter/wave_frequency = 8.0
-shader_parameter/tint_color = Color(0.05, 0.15, 0.35, 0.12)
 
 [node name="Main" type="Node2D" unique_id=2013389554]
 script = ExtResource("1")
@@ -81,9 +73,6 @@ script = ExtResource("5")
 [node name="CanvasLayer" type="CanvasLayer" parent="ScreenEffects" unique_id=1245039028]
 layer = 100
 
-[node name="UnderwaterOverlay" type="ColorRect" parent="ScreenEffects/CanvasLayer" unique_id=1890708856]
-material = SubResource("ShaderMaterial_underwater")
-mouse_filter = 2
 
 [node name="CharacterSetup" type="CanvasLayer" parent="." unique_id=102403001]
 layer = 115

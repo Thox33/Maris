@@ -135,7 +135,7 @@ func _diagnose_and_fix_physics() -> void:
 ## Returns the tile type index for a world-space tile position.
 func _get_tile_for_position(x: int, y: int) -> int:
 	var n: float = noise.get_noise_2d(float(x), float(y))
-	var depth_ratio: float = float(y) / float(GameConstants.WORLD_DEPTH_SCALE)
+	var depth_ratio: float = float(y) / float(GameConstants.WORLD_SCALE)
 	var density: float = n + (depth_ratio * 1.5 - 0.5)
 
 	if density > 0.6:

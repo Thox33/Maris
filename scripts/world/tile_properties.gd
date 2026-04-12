@@ -77,8 +77,8 @@ var name: String
 var atlas_coord: Vector2i
 ## Whether the tile blocks movement (has physics collision).
 var solid: bool
-## Multiplier applied to swim speed when overlapping this tile.
-var swim_speed_factor: float
+## Multiplier applied to move speed when overlapping this tile.
+var move_speed_factor: float
 ## Whether this tile can be broken by the player.
 var breakable: bool
 ## Time in seconds to break this tile.
@@ -104,7 +104,7 @@ func _init(
 	p_name: String,
 	p_atlas_coord: Vector2i,
 	p_solid: bool,
-	p_swim_speed_factor: float,
+	p_move_speed_factor: float,
 	p_breakable: bool,
 	p_hardness: float,
 	p_drop_tile_id: int = -1,
@@ -118,7 +118,7 @@ func _init(
 	name = p_name
 	atlas_coord = p_atlas_coord
 	solid = p_solid
-	swim_speed_factor = p_swim_speed_factor
+	move_speed_factor = p_move_speed_factor
 	breakable = p_breakable
 	hardness = p_hardness
 	drop_tile_id = p_drop_tile_id if p_drop_tile_id >= 0 else p_id

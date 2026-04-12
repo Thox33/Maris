@@ -1,11 +1,11 @@
 extends HumanoidActor
-## Player controller with swim physics.
+## Player controller with top-down movement physics.
 ## Only the owning peer processes input. Remote peers are rendered from a
 ## short snapshot buffer for smoother movement.
 
-@export var swim_speed: float = GameConstants.SWIM_SPEED
-@export var swim_acceleration: float = GameConstants.SWIM_ACCELERATION
-@export var swim_friction: float = GameConstants.SWIM_FRICTION
+@export var move_speed: float = GameConstants.MOVE_SPEED
+@export var move_acceleration: float = GameConstants.MOVE_ACCELERATION
+@export var move_friction: float = GameConstants.MOVE_FRICTION
 
 var _chunk_manager: Node
 var _terrain_layer: TileMapLayer
@@ -105,25 +105,25 @@ func _physics_process(delta: float) -> void:
 		return
 
 	if ChatManager.is_chat_open:
-		velocity = velocity.move_toward(Vector2.ZERO, swim_friction * delta)
+		velocity = velocity.move_toward(Vector2.ZERO, move_friction * delta)
 		move_and_slide()
 		_update_actor_motion_state(velocity)
 		return
 
 	var input_dir := Vector2.ZERO
-	input_dir.x = Input.get_axis("swim_left", "swim_right")
-	input_dir.y = Input.get_axis("swim_up", "swim_down")
+	input_dir.x = Input.get_axis("move_left", "move_right")
+	input_dir.y = Input.get_axis("move_up", "move_down")
 
 	if input_dir.length() > 1.0:
 		input_dir = input_dir.normalized()
 
 	var speed_factor: float = _get_tile_speed_factor()
-	var effective_speed: float = swim_speed * speed_factor
+	var effective_speed: float = move_speed * speed_factor
 
 	if input_dir != Vector2.ZERO:
-		velocity = velocity.move_toward(input_dir * effective_speed, swim_acceleration * delta)
+		velocity = velocity.move_toward(input_dir * effective_speed, move_acceleration * delta)
 	else:
-		velocity = velocity.move_toward(Vector2.ZERO, swim_friction * delta)
+		velocity = velocity.move_toward(Vector2.ZERO, move_friction * delta)
 
 	move_and_slide()
 	_update_actor_motion_state(velocity)
@@ -193,7 +193,7 @@ func _get_tile_speed_factor() -> float:
 
 	var props: TileProperties = TileProperties.get_properties(tile_id)
 	if props and not props.solid:
-		return props.swim_speed_factor
+		return props.move_speed_factor
 
 	return 1.0
 

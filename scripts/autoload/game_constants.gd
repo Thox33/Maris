@@ -17,15 +17,15 @@ const CHUNK_UNLOAD_RADIUS: int = 5
 const CHUNKS_PER_FRAME: int = 1
 
 ## Depth scaling factor for terrain density calculation.
-const WORLD_DEPTH_SCALE: int = 256
+const WORLD_SCALE: int = 256
 
 # --- Player / Swimming ---
 ## Maximum swim speed in pixels per second.
-const SWIM_SPEED: float = 120.0
+const MOVE_SPEED: float = 120.0
 ## How quickly the player accelerates when pressing a direction.
-const SWIM_ACCELERATION: float = 400.0
-## How quickly the player decelerates when no input (water friction).
-const SWIM_FRICTION: float = 200.0
+const MOVE_ACCELERATION: float = 400.0
+## How quickly the player decelerates when no input.
+const MOVE_FRICTION: float = 200.0
 
 # --- Networking ---
 const DEFAULT_PORT: int = 7777
