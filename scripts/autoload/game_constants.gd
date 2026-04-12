@@ -19,8 +19,8 @@ const CHUNKS_PER_FRAME: int = 1
 ## Depth scaling factor for terrain density calculation.
 const WORLD_SCALE: int = 256
 
-# --- Player / Swimming ---
-## Maximum swim speed in pixels per second.
+# --- Player / Movement ---
+## Maximum movement speed in pixels per second.
 const MOVE_SPEED: float = 120.0
 ## How quickly the player accelerates when pressing a direction.
 const MOVE_ACCELERATION: float = 400.0

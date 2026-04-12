@@ -1,168 +1,118 @@
-# Underwater Sandbox — 2D Multiplayer Coop Game
+# Overworld Sandbox - 2D Multiplayer Coop Game
 
-Godot 4.6, GDScript, host-as-server multiplayer. Terraria-inspired but entirely underwater (no sky/gravity — free-swimming movement).
+Godot 4.6, GDScript, host-as-server multiplayer. The game is now a top-down overworld sandbox with free 4-direction movement and no gravity.
 
 ## Architecture
 
-```
-[Entry point: scenes/ui/lobby_ui.tscn → scenes/ui/lobby_ui.gd]
-  └── on connect → change_scene_to "main.tscn"
+```text
+[Entry point: scenes/ui/lobby_ui.tscn -> scenes/ui/lobby_ui.gd]
+  -> on connect -> change_scene_to "main.tscn"
 
 Main (Node2D)                         scenes/main/main.gd
-├── World (WorldGenerator)            scenes/world/world_generator.gd
-│   ├── TerrainLayer (TileMapLayer)   terrain_tileset.tres
-│   ├── BaseVisualLayer (TileMapLayer) terrain_tileset.tres
-│   ├── PlantLayer (TileMapLayer)     terrain_tileset.tres  ← plant/coral overlay, carries vegetation_sway shader
-│   └── ChunkManager (Node)           scripts/world/chunk_manager.gd
-├── Players (Node2D)
-│   └── <PeerId> (CharacterBody2D)    scenes/player/player.gd
-│       ├── CollisionShape2D
-│       ├── Sprite2D
-│       ├── Camera2D
-│       ├── BlockInteraction          scripts/player/block_interaction.gd
-│       └── UnderwaterEffects         scripts/player/underwater_effects.gd
-├── Items (Node2D)
-│   └── <ItemEntity> (CharacterBody2D) scripts/items/item_entity.gd
-├── PlayerSpawner (MultiplayerSpawner)
-├── ItemSpawner (MultiplayerSpawner)
-└── InventoryManager (Node)           scenes/main/inventory_manager.gd
+|- World (WorldGenerator)             scenes/world/world_generator.gd
+|  |- GroundLayer (TileMapLayer)      runtime ground atlas
+|  |- GroundCollisionLayer            runtime collision-only tiles
+|  |- LiquidLayer (TileMapLayer)      runtime liquid atlas
+|  |- TerrainLayer (TileMapLayer)     terrain_tileset.tres
+|  |- BaseVisualLayer (TileMapLayer)  terrain_tileset.tres
+|  |- DepthSorted/DecorLayer          terrain_tileset.tres
+|  |- ChunkManager (Node)             scripts/world/chunk_manager.gd
+|  `- StructureManager (Node)         scripts/world/structure_manager.gd
+|- Players (Node2D)
+|  `- <PeerId> (CharacterBody2D)      scenes/player/player.gd
+|     |- CollisionShape2D
+|     |- VisualRoot/HumanoidVisual
+|     |- Camera2D
+|     |- BlockInteraction             scripts/player/block_interaction.gd
+|     |- HotbarUI
+|     |- DebugOverlay
+|     `- ChatUI
+|- Items (Node2D)
+|  `- <ItemEntity> (CharacterBody2D)  scripts/items/item_entity.gd
+|- PlayerSpawner (MultiplayerSpawner)
+|- ItemSpawner (MultiplayerSpawner)
+`- InventoryManager (Node)            scenes/main/inventory_manager.gd
 ```
 
 ## Key Systems
 
 ### Chunk System
-- World is divided into 16x16-tile chunks, loaded/unloaded around players
-- `ChunkManager` checks player positions every 0.2s, load radius=3, unload radius=5 (hysteresis)
-- Host generates chunks from noise, clients request via RPC
-- `ChunkData` stores base_tiles + modifications separately (compact save format)
-- Plant/coral tiles render on `PlantLayer` for the sway shader, while `BaseVisualLayer` skips them; `TerrainLayer` remains the authority for physics/speed checks
+- World is divided into `16x16`-tile chunks, loaded and unloaded around players.
+- `ChunkManager` checks player positions every `0.2s`, load radius=`3`, unload radius=`5`.
+- The host generates chunks from noise; clients request them via RPC.
+- `ChunkData` stores `ground_base_tiles`, `top_base_tiles`, and per-layer modifications.
+- `GroundLayer` and `LiquidLayer` are visual-only.
+- `GroundCollisionLayer` blocks liquid and void cells.
+- `TerrainLayer` remains the authoritative top-tile collision layer.
 
 ### Tile System
-- 3 tile types: Sand (solid), Stone (solid), Coral (swim-through, slows to 40%)
-- `TileProperties` is the single source of truth: each entry has a stable integer `id`, string `name`, `atlas_coord`, and gameplay attributes
-- `TileProperties.registry` — int ID → TileProperties
-- `TileProperties.by_name` — string name → int ID (keep in sync with registry)
-- `TileProperties.get_id_from_atlas(coord)` — decouples tile ID from atlas position
-- Integer IDs are permanent — never reuse a removed ID
-- New tile type = one entry in `registry` + one in `by_name`
-- Physics layer set up via `_diagnose_and_fix_physics()` at runtime (iterates registry, applies solid/non-solid rules)
-- Collision: TileSet physics_layer_0 (layer=1 World), Player (layer=2, mask=1)
+- Ground and top tiles are split across `GroundTileProperties` and `TileProperties`.
+- `GroundTileProperties` defines floor states such as dirt, sand, stone, grass, water, and lava.
+- `TileProperties` defines top-layer obstacles and decor such as sand blocks, stone blocks, and coral variants.
+- Non-solid top decor uses `move_speed_factor` for slowdown.
+- Integer IDs are permanent and must never be reused.
 
-### Item System
-- `ItemProperties` — separate registry from tiles, linked via optional `tile_id` field
-- `ItemProperties.registry` — int ID → ItemProperties (id, name, max_stack, tile_id)
-- `ItemProperties.from_tile(tile_id)` — maps a tile to its drop item
-- Items that aren't tiles (tools, materials) have `tile_id = -1`
-- New item type = one entry in `ItemProperties.registry` + one in `ItemProperties.by_name`
+### Inventory System
+- `Inventory` is a generic container class (RefCounted, no Node).
+- 40 slots per player, first 10 = hotbar.
+- `InventoryManager` is the server-facing bridge on `Main`.
+- `InventoryAuthorityService` owns canonical inventory mutation rules.
+- `WorldPlacementService` validates range, occupancy, and placement legality.
 
-### Inventory System (Minecraft-style)
-- `Inventory` — generic container class (RefCounted, no Node). Knows nothing about players or networking. Usable for player inventories, chests, or any future container.
-- 40 slots per player, first 10 = hotbar (view on inventory, not a separate structure)
-- `InventoryManager` — host-authoritative, lives on Main as server infrastructure
-  - Manages all player inventories keyed by peer_id
-  - Full inventory sync on join, delta sync (single slot) on changes
-  - Transaction model: client sends intents, host validates and applies
+### Item Drops
+- Broken blocks spawn `ItemEntity` via `ItemSpawner`.
+- Item drops collide with the world, drift gently, have pickup delay, and despawn after a timeout.
+- Pickup is host-authoritative: the host adds items to inventory and removes the entity.
 
-### Item Drops (World Entities)
-- Broken blocks spawn `ItemEntity` (CharacterBody2D) in the world via `ItemSpawner`
-- Items collide with terrain, drift/float underwater, have pickup delay + despawn timer
-- Pickup via Area2D overlap → host adds to player inventory → entity removed
-- If inventory full, item stays in world (Minecraft behavior)
-
-### Block Breaking (Terraria-style)
-- `BlockInteraction` handles input, range check, progress tracking, crack overlay
-- `ChunkManager` handles the actual break + network sync (has host authority)
-- On break: tile_id captured before erasure → item drop spawned at tile center
-- Modifications persist in ChunkData across chunk load/unload cycles
-
-### Block Placing
-- `BlockInteraction` detects right-click on empty cell, sends intent (slot + coord) to `InventoryManager`
-- `InventoryManager` validates on host: item exists in slot, is placeable, target empty, player in range
-- Host calls `ChunkManager.place_tile()` + removes item from inventory, syncs both
+### Breaking And Placing
+- `BlockInteraction` handles local input, range checks, and intent submission.
+- `UseAuthorityService` is host-authoritative for primary use / breaking.
+- `ChunkManager` applies canonical top-tile mutations and synchronizes them.
+- `StructureManager` keeps structure occupancy separate from tile data.
 
 ### Networking
-- Host-as-server OR dedicated server (configurable via `Main.dedicated_server` flag)
-- Max 4 players, port 7777
-- Scene flow: `lobby_ui.tscn` → connection → `change_scene_to_file("main.tscn")`
-- Player spawning: `MultiplayerSpawner` ($PlayerSpawner) with custom `spawn_function`
-- Item spawning: `MultiplayerSpawner` ($ItemSpawner) with custom `spawn_function`
-- Host joins through same path as clients (no special case) — `_server_handle_join()`
-- All players (including host) go through `_client_ready` → host sends seed + spawns player + creates inventory
-- Block breaks: client → host (request) → all clients (sync) + item drop spawned
-- Block places: client intent → host validates → host applies + syncs
-- Inventory: full sync on join, delta (slot-level) on changes
-- Player position: authority → all peers (unreliable)
+- Host-as-server or dedicated server.
+- Max 4 players, default port `7777`.
+- Player spawning uses `MultiplayerSpawner`.
+- Item spawning uses `MultiplayerSpawner`.
+- Movement is owning-peer-authoritative for trusted co-op.
+- Inventory, placement, chunk mutation, structure mutation, and persistence are host-authoritative.
 
 ### Visual Effects
-Three-layer separation: World-Rendering | Screen-Effects | Gameplay-Data
-
-- `vegetation_sway.gdshader` — vertex displacement on `PlantLayer` (World-layer, active)
-- `underwater.gdshader` — fullscreen wave distortion + blue tint (Screen-layer)
-  - Owned by `ScreenEffects` node in `main.tscn` (CanvasLayer 100 → ColorRect)
-  - `ScreenEffects.set_underwater(bool)` to toggle — currently always on
-  - ColorRect size set from `get_viewport_rect()` + `size_changed` signal
-- `UnderwaterEffects` — CPUParticles2D bubbles only (World-layer, local player only)
-  - Bubbles are world-space → correctly live on the Player node
-
-### Screen Effects Architecture
-New effects go in `ScreenEffects` (scripts/main/screen_effects.gd), not on Player:
-- Damage flash, vignette, pause blur → add method + ColorRect/node to ScreenEffects
-- Player detects state → emits event or calls ScreenEffects directly
-- Player is the trigger, ScreenEffects is the owner
-
-CanvasLayer convention:
-- `0` world
-- `100` fullscreen world shaders/effects
-- `110` HUD
-- `120` menus/windows
-- `130` modal/debug
-- UI that must not be distorted by fullscreen shaders must live above `100`
+- `vegetation_sway.gdshader` animates decor on `DecorLayer`.
+- `liquid.gdshader` animates water and lava on `LiquidLayer`.
+- `BreakVisualService` renders crack overlays and break particles.
 
 ## Autoloads
-- `GameConstants` — all tuning values (tile size, chunk config, swim speeds, network, inventory, item drops)
-- `GameEvents` — central event bus (decouples systems via signals)
-- `NetworkManager` — ENet multiplayer, signals for connect/disconnect
-- `SaveManager` — world persistence (server-only writes), atomic file I/O
+- `GameConstants` - world, movement, networking, inventory, and persistence tuning.
+- `GameEvents` - central gameplay event bus.
+- `NetworkManager` - ENet setup and peer lifecycle.
+- `SaveManager` - world and player persistence.
+- `ClientProfile` - local account identity and display name.
+- `ChatManager` - chat state and session-local context.
 
-### GameEvents (Event Bus)
-- `game_leaving` — fired by NetworkManager before peer closes (any disconnect path)
-- `block_broken(coord, tile_id)` — fired by ChunkManager after break (server-side)
-- `block_placed(coord, tile_id)` — fired by ChunkManager after place (server-side)
-- `player_joined(peer_id)` — fired by Main after full join sequence
-- `player_left(peer_id)` — fired by Main before disconnect cleanup
-- `item_picked_up(peer_id, item_id, count)` — fired by ItemEntity after pickup
-- New systems (sound, particles, achievements) connect to GameEvents — no direct coupling needed
-
-### Save System
-- Directory layout: `user://saves/<world_name>/` with `world.json`, `chunks/`, `players/`
-- Only chunk **modifications** are saved (base terrain regenerated from seed)
-- Atomic writes: data → `.tmp` file → rename (crash-safe)
-- Chunks saved on unload, restored on load via `_generate_and_restore()`
-- Player state (position + inventory) saved on disconnect, restored on join
-- Auto-save every 120s (configurable via `GameConstants.AUTO_SAVE_INTERVAL`)
-- Full save on window close (`NOTIFICATION_WM_CLOSE_REQUEST`)
-- Player identity: keyed by `peer_id` (string) — swap to persistent IDs when lobby adds player names
-- `SAVE_VERSION` constant for future format migrations
+## Save System
+- Saves live under `user://saves/<world_name>/`.
+- Only chunk modifications are written; base terrain is regenerated from the seed.
+- Chunk files store top and ground modifications separately.
+- Player saves are keyed by persistent `account_id`, not by transient `peer_id`.
+- Writes are atomic via `.tmp` + rename.
 
 ## Conventions
-- GDScript style enforced via `gdtoolkit` (gdlint + gdformat)
-- Pre-commit config ready (`.pre-commit-config.yaml`), needs `git init` + `pre-commit install`
-- German communication, English code/comments
-- Prefer .tres/.tscn for editor-owned data, .gd for logic
-- New tile types = one entry in `TileProperties.registry` + one in `TileProperties.by_name`
-- New item types = one entry in `ItemProperties.registry` + one in `ItemProperties.by_name`
-- Server infrastructure (InventoryManager, ChunkManager, Spawners) lives on Main, not on Player
-- Generic data classes (Inventory, ChunkData) are RefCounted in `scripts/`, not Nodes
+- German communication, English code/comments.
+- Prefer `.tres` / `.tscn` for editor-owned data and `.gd` for logic.
+- Server infrastructure lives on `Main`, not on `Player`.
+- Generic data classes such as `Inventory` and `ChunkData` are RefCounted scripts, not Nodes.
 
 ## Physics Layers
-| Layer | Name   | Used by                    |
-|-------|--------|----------------------------|
-| 1     | World  | TileSet solid tiles        |
-| 2     | Player | CharacterBody2D (players)  |
+| Layer | Name | Used by |
+|---|---|---|
+| 1 | World | Ground/top collision tiles and structure visuals |
+| 2 | Player | CharacterBody2D players |
 
 ## File Naming
 - Scenes: `scenes/<category>/<name>.tscn` + `.gd`
-- Scene-bound scripts (have RPCs, need scene tree): `scenes/<category>/<name>.gd`
+- Scene-bound scripts: `scenes/<category>/<name>.gd`
 - Pure data/logic scripts: `scripts/<category>/<name>.gd`
 - Assets: `assets/<type>/`
 - Shaders: `assets/shaders/<name>.gdshader`

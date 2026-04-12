@@ -1,6 +1,6 @@
 extends CharacterBody2D
 ## A dropped item floating in the world. Has physics (collides with terrain),
-## gentle underwater drift, pickup via Area2D overlap, and a despawn timer.
+## gentle ambient drift, pickup via Area2D overlap, and a despawn timer.
 ## Host-authoritative: only the server runs physics and pickup logic.
 
 const ITEM_ICON_VISUALS := preload("res://scripts/items/item_icon_visuals.gd")
@@ -98,11 +98,11 @@ func _physics_process(delta: float) -> void:
 				replicated_position = position
 				return
 
-	# Gentle underwater floating: sinusoidal vertical bob.
+	# Gentle ambient floating: sinusoidal vertical bob.
 	_float_phase += delta * 2.0
 	var float_offset := sin(_float_phase) * GameConstants.ITEM_FLOAT_SPEED
 
-	# Drift decays over time (water friction).
+	# Drift decays over time so dropped items settle naturally.
 	_drift_velocity = _drift_velocity.move_toward(Vector2.ZERO, 20.0 * delta)
 
 	velocity = _drift_velocity + Vector2(0.0, float_offset)

@@ -177,8 +177,8 @@ func _push_remote_state(pos: Vector2, vel: Vector2) -> void:
 		_state_buffer.remove_at(0)
 
 
-## Returns the swim speed factor for the tile at the player's center position.
-## 1.0 = open water (full speed), < 1.0 = slowed (e.g. coral).
+## Returns the movement speed factor for the top tile at the player's center position.
+## 1.0 = empty cell, < 1.0 = slowed by non-solid decor (e.g. coral).
 func _get_tile_speed_factor() -> float:
 	if _chunk_manager == null:
 		return 1.0

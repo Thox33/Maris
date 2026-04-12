@@ -42,11 +42,11 @@ The V1 humanoid should read as:
 - slightly boxy rather than round and gummy
 - calm and grounded rather than hyper-dynamic
 
-The visual mood should fit the underwater game:
+The visual mood should fit the overworld game:
 
 - simple
 - strong silhouette
-- easy to read on bright coral and darker water backgrounds
+- easy to read on bright grass/sand and darker stone/liquid backgrounds
 - slightly charming, but not overly cute or toy-like
 
 ## Core Shape Language
@@ -146,7 +146,7 @@ V1 should avoid:
 The character must survive three checks:
 
 1. It must read clearly when standing still at gameplay zoom.
-2. It must remain legible against bright coral and dark water.
+2. It must remain legible against bright ground and darker obstacle/liquid backgrounds.
 3. It must still look coherent when mirrored in side view.
 
 If a design only looks good zoomed in, it is not ready.

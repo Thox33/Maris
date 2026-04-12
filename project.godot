@@ -10,8 +10,8 @@ config_version=5
 
 [application]
 
-config/name="Underwater Sandbox"
-config/description="2D Multiplayer Coop Underwater Sandbox Game"
+config/name="Overworld Sandbox"
+config/description="2D Multiplayer Coop Top-Down Sandbox Game"
 run/main_scene="res://scenes/ui/lobby_ui.tscn"
 config/features=PackedStringArray("4.6", "GL Compatibility")
 config/icon="res://icon.svg"

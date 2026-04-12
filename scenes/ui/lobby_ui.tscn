@@ -78,7 +78,7 @@ text = "CO-OP SANDBOX"
 custom_minimum_size = Vector2(0, 120)
 layout_mode = 2
 theme_override_font_sizes/font_size = 52
-text = "Underwater\nSandbox"
+text = "Overworld\nSandbox"
 vertical_alignment = 1
 
 [node name="HeroRule" type="ColorRect" parent="SafeArea/Layout/HeroColumn/HeroContent"]
@@ -91,7 +91,7 @@ custom_minimum_size = Vector2(0, 80)
 layout_mode = 2
 theme_override_colors/font_color = Color(0.70, 0.83, 0.88, 0.82)
 theme_override_font_sizes/font_size = 19
-text = "Host. Join. Dive."
+text = "Host. Join. Explore."
 autowrap_mode = 3
 
 [node name="HeroSpacer" type="Control" parent="SafeArea/Layout/HeroColumn/HeroContent"]

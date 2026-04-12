@@ -93,7 +93,7 @@ Continue improving "alive world" perception around the player pipeline.
 Current baseline already exists:
 
 - vegetation sway shader
-- underwater screen effect
+- liquid ground shader
 - break particles
 - floating item motion
 

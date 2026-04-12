@@ -160,8 +160,9 @@ func generate_chunk(coord: Vector2i) -> ChunkData:
 			var world_x: int = origin_x + local_x
 			var world_y: int = origin_y + local_y
 			var idx: int = local_y * GameConstants.CHUNK_SIZE + local_x
-			chunk.ground_base_tiles[idx] = _get_ground_tile_for_position(world_x, world_y)
-			chunk.top_base_tiles[idx] = _get_top_tile_for_position(world_x, world_y)
+			var ground_id := _get_ground_tile_for_position(world_x, world_y)
+			chunk.ground_base_tiles[idx] = ground_id
+			chunk.top_base_tiles[idx] = _get_top_tile_for_position(world_x, world_y, ground_id)
 
 	return chunk
 
@@ -250,9 +251,14 @@ func _get_ground_tile_for_position(x: int, y: int) -> int:
 
 
 ## Returns the top tile ID for a world-space tile position.
+## Top tiles only spawn on solid ground.
 ## Solid blocks (stone, sand) form the natural terrain obstacles.
 ## Vegetation spawns in sparse open areas.
-func _get_top_tile_for_position(x: int, y: int) -> int:
+func _get_top_tile_for_position(x: int, y: int, ground_id: int) -> int:
+	var ground_props := GroundTileProperties.get_properties(ground_id)
+	if ground_props == null or not ground_props.is_solid:
+		return TileProperties.EMPTY
+
 	var n: float = noise.get_noise_2d(float(x), float(y))
 	var depth_ratio: float = float(y) / float(GameConstants.WORLD_SCALE)
 	var density: float = n + (depth_ratio * 1.5 - 0.5)

@@ -4,7 +4,7 @@ extends RefCounted
 ## Integer IDs are stable and permanent - never reuse a removed ID.
 ## String names are the canonical keys used in save files and code.
 
-## Sentinel for empty / open-water cells.
+## Sentinel for an empty top-layer cell.
 const EMPTY: int = -1
 const INVALID_ATLAS_COORD := Vector2i(-1, -1)
 
@@ -129,7 +129,7 @@ func _init(
 	cap_offset_px = maxi(p_cap_offset_px, 0)
 
 
-## Returns properties for a tile ID, or null for empty / water tiles.
+## Returns properties for a tile ID, or null for empty top-layer cells.
 static func get_properties(tile_id: int) -> TileProperties:
 	return registry.get(tile_id)
 

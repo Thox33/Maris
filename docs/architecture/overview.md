@@ -59,9 +59,12 @@ lobby_ui.tscn  (entry point)
 
 main.tscn  (game session composition root)
   World (WorldGenerator)
-    TerrainLayer      - hidden authoritative tile layer for collision / speed checks
-    BaseVisualLayer   - visible flat tile visuals for non-plant flat tiles
-    PlantLayer        - plant / coral visuals with vegetation sway shader
+    GroundLayer       - visible solid ground floor tiles
+    GroundCollisionLayer - hidden collision tiles for liquid / void ground states
+    LiquidLayer       - visible water / lava layer with shader animation
+    TerrainLayer      - hidden authoritative top-tile layer for collision / speed checks
+    BaseVisualLayer   - visible flat top-tile visuals
+    DecorLayer        - plant / decor visuals with vegetation sway shader
     ChunkManager
     StructureManager
     DepthSorted
@@ -83,9 +86,6 @@ main.tscn  (game session composition root)
   WorldDropService
   UseAuthorityService
   BreakVisualService
-  ScreenEffects
-    CanvasLayer (100)
-      UnderwaterOverlay
   OverheadLayer (112)
   CharacterSetup (115)
 ```
@@ -197,7 +197,7 @@ Current gameplay-facing fields:
 | `name` | Canonical string key used in code and save data. |
 | `atlas_coord` | Base atlas coord in `terrain_tileset.tres`. |
 | `solid` | Whether the tile blocks movement. |
-| `swim_speed_factor` | Speed multiplier when overlapping a non-solid tile. |
+| `move_speed_factor` | Speed multiplier when overlapping a non-solid top tile. |
 | `breakable` | Whether the tile can be mined. |
 | `hardness` | Target durability for host-authoritative breaking. |
 | `render_kind` | Which world render path this tile uses (`FLAT_BASE`, `SWAY_DECOR`, `TALL_STRUCTURE`). |
@@ -210,7 +210,7 @@ Current registry surface:
 ```text
 TileProperties.registry   - int ID -> TileProperties
 TileProperties.by_name    - string name -> int ID
-TileProperties.EMPTY      - no tile / open water
+TileProperties.EMPTY      - no top tile
 ```
 
 Integer IDs are permanent and must never be reassigned.
@@ -218,7 +218,7 @@ Integer IDs are permanent and must never be reassigned.
 ## Chunk System And World Rendering
 
 - the world is divided into `16x16`-tile chunks
-- `ChunkData` stores `base_tiles` (`PackedByteArray`) plus `modifications` (`Dictionary`)
+- `ChunkData` stores `ground_base_tiles` and `top_base_tiles`, plus per-layer modifications
 - `ChunkManager` polls player positions every `0.2s`
 - load radius is `3`, unload radius is `5`
 - the host generates chunks via `FastNoiseLite`
@@ -226,14 +226,17 @@ Integer IDs are permanent and must never be reassigned.
 
 Current layer split:
 
-- `TerrainLayer` is the authoritative tile occupancy layer used for collision and movement-speed checks
+- `GroundLayer` renders solid walkable floor tiles
+- `GroundCollisionLayer` blocks liquid and void cells independently from visuals
+- `LiquidLayer` renders water and lava visuals
+- `TerrainLayer` is the authoritative top-tile occupancy layer used for collision and movement-speed checks
 - `BaseVisualLayer` renders the visible flat block sprites for `FLAT_BASE` tiles
 - `DecorLayer` lives inside the depth-sorted branch, renders `SWAY_DECOR` tiles, and carries the vegetation sway shader
 - tall structure blocks use runtime `Node2D` visuals instead of a single flat tile
 
 Persistence behavior:
 
-- modified chunks are kept in `ChunkData.modifications`
+- modified chunks are kept in `ChunkData.top_modifications` and `ChunkData.ground_modifications`
 - modified chunks are saved on unload and during autosave
 - chunk base terrain is regenerated from seed on load
 
@@ -273,21 +276,19 @@ Current item-use scaffold:
 
 ## Visual Effects
 
-- **Underwater shader** (`assets/shaders/underwater.gdshader`) - fullscreen distortion and tint on `CanvasLayer 100`
-- **Vegetation sway shader** (`assets/shaders/vegetation_sway.gdshader`) - vertex displacement on `PlantLayer`
+- **Vegetation sway shader** (`assets/shaders/vegetation_sway.gdshader`) - vertex displacement on `DecorLayer`
+- **Liquid shader** (`assets/shaders/liquid.gdshader`) - shimmer animation on `LiquidLayer`
 - **BreakVisualService** - generated crack-stage sprites and break particles
-- **UnderwaterEffects** - local player underwater presentation helpers such as bubbles
 
 ### Current CanvasLayer usage
 
 These numbers describe the current implementation, not a strict future-proof convention:
 
-- `100` - fullscreen underwater overlay
 - `110` - hotbar, chat, session menu, chunk debug canvas
 - `112` - overhead labels
 - `115` - character setup modal
 - `120` - player debug overlay
 
-## Underwater Physics
+## Movement Model
 
-There is no gravity. Players swim freely in all directions via `move_and_slide()` with a velocity vector controlled by input on both axes. Speed is modulated by the tile the player overlaps: open water uses `1.0x`, coral uses `0.4x`.
+There is no gravity. Players move freely in all directions via `move_and_slide()` with a velocity vector controlled by input on both axes. Movement speed is modulated by the non-solid top tile the player overlaps: empty cells use `1.0x`, decor such as coral uses the tile's `move_speed_factor`.

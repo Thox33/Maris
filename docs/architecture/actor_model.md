@@ -178,7 +178,6 @@ PlayerActor
 |-- OverheadSource
 |-- Camera2D
 |-- BlockInteraction
-|-- UnderwaterEffects
 |-- HotbarUI
 |-- DebugOverlay
 `-- ChatUI
