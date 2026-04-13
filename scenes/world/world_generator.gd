@@ -134,6 +134,7 @@ func _setup_liquid_layer() -> void:
 	if shader != null:
 		var mat := ShaderMaterial.new()
 		mat.shader = shader
+		mat.set_shader_parameter("tile_size", float(GameConstants.TILE_SIZE))
 		liquid_layer.material = mat
 
 
