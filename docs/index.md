@@ -25,6 +25,8 @@ The documentation is organized by document type, not by age or by whatever file 
 - [`systems/inventory_and_hotbar.md`](systems/inventory_and_hotbar.md)
 - [`plans/roadmap.md`](plans/roadmap.md)
 - [`plans/animation_and_character_plan.md`](plans/animation_and_character_plan.md)
+- [`plans/overworld_biomes_plan.md`](plans/overworld_biomes_plan.md)
+- [`plans/overworld_migration_plan.md`](plans/overworld_migration_plan.md)
 
 ## Documentation Rules
 
