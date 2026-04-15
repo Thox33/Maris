@@ -17,14 +17,14 @@ The refactor baseline is complete and its current shape is reflected in [`../arc
 - [x] Move block and structure breaking to host-authoritative item-use damage + cooldown
 
 ### Autotiling / Terrain Blending
-Tiles should visually blend with same-type neighbors (coral colony, seamless sand/stone).
+Tiles should visually blend with same-type neighbors (grass patches, seamless sand/stone).
 
 **Godot system:** TileSet Terrain Sets + `set_cells_terrain_connect()`
 
 **What's needed:**
 - For each tile type: a **blob tileset** with up to 47 sprite variants
   (8-directional corner+side matching - the standard "Wang blob" layout)
-- Open question: should coral do full blob (colony-look) or just 4-direction side matching?
+- Open question: should vegetation-heavy ground patches do full blob or just 4-direction side matching?
 - Add a Terrain Set to `terrain_tileset.tres` in the editor
 - Assign terrain patterns to each atlas tile variant
 - Replace `terrain_layer.set_cell()` in `ChunkManager._apply_chunk()` with
@@ -59,23 +59,23 @@ ChunkData already has `base_tiles` + `modifications` separately - the hard part 
 
 - [x] Block placing (right click)
 - [x] Hotbar UI
-- [ ] More tile types (seaweed, obsidian, treasure blocks, ...)
-- [ ] Biomes (cold/warm/deep zones with different generation parameters)
-- [ ] Fish / passive sea creatures
+- [ ] More tile types (shrubs, ore nodes, ruins, ...)
+- [ ] Biomes (starter/heat/cold/overgrown/rocky zones with different generation parameters)
+- [ ] Passive overworld creatures
 - [ ] Enemies
 - [ ] Crafting
 - [ ] Chests / loot
-- [ ] Water currents (push player in a direction)
+- [ ] Environmental hazards and terrain effects
 - [ ] Character editing after first creation
 
 ---
 
 ## Visual / Feel
 
-- [ ] Dynamic lighting (`CanvasLight2D`) - headlamp, glowing coral, bioluminescence
-- [ ] Light rays from above (shader effect)
-- [ ] Animated tiles (AnimatedSprite2D or animated atlas - waving seaweed, pulsing coral)
-- [ ] Better bubble particles (GPUParticles2D instead of CPUParticles2D)
+- [ ] Dynamic lighting (`CanvasLight2D`) - torches, campfires, lava glow
+- [ ] Atmospheric light shafts / fog layers
+- [ ] Animated tiles (AnimatedSprite2D or animated atlas - grass, foliage, lava details)
+- [ ] Better ambient particles (dust, leaves, embers)
 - [ ] Minimap (SubViewport rendering a zoomed-out world view)
 - [x] Player animation baseline (side-view `idle` / `run`)
 - [ ] Additional player action states (`use`, `hurt`, `attack`)

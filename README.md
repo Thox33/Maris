@@ -1,6 +1,6 @@
-# Underwater Sandbox
+# Overworld Sandbox
 
-2D multiplayer co-op sandbox game built with Godot 4 and GDScript. The project focuses on an underwater-only world with procedural terrain, free swimming movement, block interaction, and host-authoritative multiplayer from the start.
+2D multiplayer co-op sandbox game built with Godot 4 and GDScript. The project is moving toward a top-down overworld with procedural terrain, chunk streaming, block interaction, and host-authoritative multiplayer from the start.
 
 ## Current Status
 
@@ -9,7 +9,8 @@
 - Procedural chunk-based world generation
 - Block breaking and placing
 - Inventory, hotbar, and item pickup/drop loop
-- Underwater fullscreen effect and vegetation sway shader
+- Ground + liquid world layers with runtime tilesets
+- Vegetation sway and liquid motion shaders
 
 ## Core Tech
 
