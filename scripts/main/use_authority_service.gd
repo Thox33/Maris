@@ -1,9 +1,11 @@
 extends Node
+const WORLD_PROP_CATALOG := preload("res://scripts/world/world_prop_catalog.gd")
 
 signal damaged_target_updated(target_key: String, target_data: Dictionary)
 signal damaged_target_cleared(target_key: String)
 
 const TARGET_KIND_TILE := "tile"
+const TARGET_KIND_PROP := "prop"
 const TARGET_KIND_STRUCTURE := "structure"
 
 var players_node: Node
@@ -200,6 +202,17 @@ func _build_damaged_target(target: Dictionary) -> Dictionary:
 
 func _resolve_break_target(coord: Vector2i) -> Dictionary:
 	if chunk_manager != null:
+		var prop_id := int(chunk_manager.get_prop_at(coord))
+		if prop_id != WORLD_PROP_CATALOG.EMPTY:
+			var prop_definition = WORLD_PROP_CATALOG.get_definition(prop_id)
+			if prop_definition != null and prop_definition.breakable:
+				return {
+					"key": _prop_target_key(coord),
+					"kind": TARGET_KIND_PROP,
+					"coord": coord,
+					"durability": prop_definition.break_hardness,
+				}
+
 		var tile_id := int(chunk_manager.get_top_tile_at(coord))
 		if tile_id != TileProperties.EMPTY:
 			var tile_props := TileProperties.get_properties(tile_id)
@@ -252,6 +265,9 @@ func _complete_break_target(target_state: Dictionary) -> void:
 	if kind == TARGET_KIND_TILE and chunk_manager != null:
 		chunk_manager.break_tile(target_state.get("coord", Vector2i.ZERO) as Vector2i)
 		return
+	if kind == TARGET_KIND_PROP and chunk_manager != null:
+		chunk_manager.break_prop(target_state.get("coord", Vector2i.ZERO) as Vector2i)
+		return
 	if kind == TARGET_KIND_STRUCTURE and structure_manager != null:
 		structure_manager.break_structure_instance(
 			String(target_state.get("structure_id", "")),
@@ -264,6 +280,9 @@ func _does_target_exist(target_state: Dictionary) -> bool:
 	if kind == TARGET_KIND_TILE and chunk_manager != null:
 		var tile_id := int(chunk_manager.get_top_tile_at(target_state.get("coord", Vector2i.ZERO) as Vector2i))
 		return tile_id != TileProperties.EMPTY
+	if kind == TARGET_KIND_PROP and chunk_manager != null:
+		var prop_id := int(chunk_manager.get_prop_at(target_state.get("coord", Vector2i.ZERO) as Vector2i))
+		return prop_id != WORLD_PROP_CATALOG.EMPTY
 	if kind == TARGET_KIND_STRUCTURE and structure_manager != null:
 		return structure_manager.has_structure_instance(
 			String(target_state.get("structure_id", "")),
@@ -305,7 +324,10 @@ func _serialize_target(target_state: Dictionary) -> Dictionary:
 		"kind": String(target_state.get("kind", "")),
 		"stage": int(target_state.get("stage", 0)),
 	}
-	if String(target_state.get("kind", "")) == TARGET_KIND_TILE:
+	if (
+		String(target_state.get("kind", "")) == TARGET_KIND_TILE
+		or String(target_state.get("kind", "")) == TARGET_KIND_PROP
+	):
 		var coord := target_state.get("coord", Vector2i.ZERO) as Vector2i
 		payload["coord_x"] = coord.x
 		payload["coord_y"] = coord.y
@@ -324,6 +346,10 @@ func _compute_stage(damage: float, durability: float) -> int:
 
 func _tile_target_key(coord: Vector2i) -> String:
 	return "tile:%s:%s" % [coord.x, coord.y]
+
+
+func _prop_target_key(coord: Vector2i) -> String:
+	return "prop:%s:%s" % [coord.x, coord.y]
 
 
 func _structure_target_key(structure_id: String, origin: Vector2i) -> String:

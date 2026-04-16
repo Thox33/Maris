@@ -1,4 +1,5 @@
 extends Node2D
+const WORLD_PROP_CATALOG := preload("res://scripts/world/world_prop_catalog.gd")
 ## Stateless procedural world generator.
 ## Produces ChunkData from noise — does not touch TileMapLayer directly.
 ## The ChunkManager orchestrates loading/unloading and network sync.
@@ -22,6 +23,7 @@ var world_seed: int = 0
 @onready var terrain_layer: TileMapLayer = $TerrainLayer
 @onready var base_visual_layer: TileMapLayer = $BaseVisualLayer
 @onready var decor_layer: TileMapLayer = $DepthSorted/DecorLayer
+@onready var world_props_node: Node2D = $DepthSorted/WorldProps
 @onready var chunk_manager: Node = $ChunkManager
 @onready var structure_manager: Node = $StructureManager
 @onready var depth_sorted: Node2D = $DepthSorted
@@ -40,6 +42,7 @@ func _ready() -> void:
 			base_visual_layer,
 			decor_layer,
 			depth_sorted,
+			world_props_node,
 			players_node
 		)
 	if structure_manager != null and structure_manager.has_method("setup"):
@@ -164,6 +167,9 @@ func generate_chunk(coord: Vector2i) -> ChunkData:
 			var ground_id := _get_ground_tile_for_position(world_x, world_y)
 			chunk.ground_base_tiles[idx] = ground_id
 			chunk.top_base_tiles[idx] = _get_top_tile_for_position(world_x, world_y, ground_id)
+			var prop_id := _get_prop_for_position(world_x, world_y, ground_id)
+			if prop_id != WORLD_PROP_CATALOG.EMPTY:
+				chunk.prop_base_cells[idx] = prop_id
 
 	return chunk
 
@@ -268,9 +274,22 @@ func _get_top_tile_for_position(x: int, y: int, ground_id: int) -> int:
 		return TileProperties.by_name["stone"]
 	if density > 0.3:
 		return TileProperties.by_name["sand"]
+	return TileProperties.EMPTY
+
+
+func _get_prop_for_position(x: int, y: int, ground_id: int) -> int:
+	var ground_props := GroundTileProperties.get_properties(ground_id)
+	if ground_props == null or not ground_props.is_solid:
+		return WORLD_PROP_CATALOG.EMPTY
+
+	var n: float = noise.get_noise_2d(float(x), float(y))
+	var depth_ratio: float = float(y) / float(GameConstants.WORLD_SCALE)
+	var density: float = n + (depth_ratio * 1.5 - 0.5)
+
+	if density > 0.3:
+		return WORLD_PROP_CATALOG.EMPTY
 	if density > 0.2 and n > 0.1:
-		# Deterministic decor variant based on position.
-		var variants := TileProperties.decor_variants
+		var variants := WORLD_PROP_CATALOG.coral_variants
 		var variant_index: int = absi(x * 73 + y * 137) % variants.size()
 		return variants[variant_index]
-	return TileProperties.EMPTY
+	return WORLD_PROP_CATALOG.EMPTY

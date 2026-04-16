@@ -3,7 +3,9 @@ extends Node
 ## Periodically checks player positions and loads/unloads chunks as needed.
 ## Host generates chunks from noise; clients request them via RPC.
 
+const WORLD_PROP_CATALOG := preload("res://scripts/world/world_prop_catalog.gd")
 const TALL_STRUCTURE_VISUAL_SCENE := preload("res://scenes/world/tall_structure_visual.tscn")
+const WORLD_PROP_SCENE := preload("res://scenes/world/world_prop.tscn")
 
 ## Set to false to silence chunk load/unload messages in the console.
 const DEBUG_LOG: bool = false
@@ -27,8 +29,10 @@ var base_visual_layer: TileMapLayer
 ## Depth-sorted decor tiles live here so they can interleave with actors.
 var decor_layer: TileMapLayer
 
+var world_props_node: Node2D
 var tall_structure_visuals_node: Node2D
 var _tall_structure_visuals: Dictionary = {}
+var _world_prop_visuals: Dictionary = {}
 
 ## Currently loaded chunks. Key = Vector2i (chunk coord), Value = ChunkData.
 var loaded_chunks: Dictionary = {}
@@ -53,6 +57,7 @@ func setup(
 	p_base_visual_layer: TileMapLayer,
 	p_decor_layer: TileMapLayer,
 	p_tall_structure_visuals_node: Node2D,
+	p_world_props_node: Node2D,
 	p_players_node: Node,
 ) -> void:
 	world_generator = p_world_generator
@@ -63,6 +68,7 @@ func setup(
 	base_visual_layer = p_base_visual_layer
 	decor_layer = p_decor_layer
 	tall_structure_visuals_node = p_tall_structure_visuals_node
+	world_props_node = p_world_props_node
 	_players_node = p_players_node
 
 
@@ -189,6 +195,7 @@ func _apply_chunk(chunk: ChunkData) -> void:
 			var cell := Vector2i(origin_x + local_x, origin_y + local_y)
 			_apply_ground_cell(cell, chunk.get_ground_tile(local_x, local_y))
 			_apply_cell(cell, chunk.get_top_tile(local_x, local_y))
+			_apply_prop_cell(cell, chunk.get_prop(local_x, local_y))
 
 
 ## Erases a chunk's tiles from the TileMapLayer and removes it from the cache.
@@ -216,6 +223,7 @@ func _erase_chunk(coord: Vector2i) -> void:
 			base_visual_layer.erase_cell(cell)
 			decor_layer.erase_cell(cell)
 			_erase_tall_structure_visual(cell)
+			_erase_world_prop_visual(cell)
 
 	loaded_chunks.erase(coord)
 
@@ -230,9 +238,12 @@ func _generate_and_restore(coord: Vector2i) -> ChunkData:
 		chunk.top_modifications = saved["top"]
 		if saved.has("ground"):
 			chunk.ground_modifications = saved["ground"]
+		if saved.has("props"):
+			chunk.prop_modifications = saved["props"]
 	elif not saved.is_empty():
 		# v1 format: flat {index: tile_id} — all entries were top-layer modifications
 		chunk.top_modifications = saved
+	_migrate_legacy_prop_modifications(chunk)
 	return chunk
 
 
@@ -292,6 +303,16 @@ func break_tile(coord: Vector2i) -> void:
 		_request_break_tile.rpc_id(1, coord.x, coord.y)
 
 
+func break_prop(coord: Vector2i) -> void:
+	if multiplayer.is_server():
+		var prop_id: int = get_prop_at(coord)
+		_do_break_prop(coord)
+		_sync_break_prop.rpc(coord.x, coord.y, prop_id)
+		GameEvents.prop_broken.emit(coord, prop_id)
+	else:
+		_request_break_prop.rpc_id(1, coord.x, coord.y)
+
+
 ## Erases a top tile and records the modification in chunk data.
 func _do_break_tile(coord: Vector2i) -> void:
 	var chunk_x: int = floori(float(coord.x) / GameConstants.CHUNK_SIZE)
@@ -304,6 +325,19 @@ func _do_break_tile(coord: Vector2i) -> void:
 		chunk.set_top_modification(local_x, local_y, -1)
 
 	_apply_cell(coord, TileProperties.EMPTY)
+
+
+func _do_break_prop(coord: Vector2i) -> void:
+	var chunk_x: int = floori(float(coord.x) / GameConstants.CHUNK_SIZE)
+	var chunk_y: int = floori(float(coord.y) / GameConstants.CHUNK_SIZE)
+	var chunk_coord := Vector2i(chunk_x, chunk_y)
+	if loaded_chunks.has(chunk_coord) and loaded_chunks[chunk_coord] != null:
+		var local_x: int = coord.x - chunk_x * GameConstants.CHUNK_SIZE
+		var local_y: int = coord.y - chunk_y * GameConstants.CHUNK_SIZE
+		var chunk: ChunkData = loaded_chunks[chunk_coord]
+		chunk.set_prop_modification(local_x, local_y, WORLD_PROP_CATALOG.EMPTY)
+
+	_apply_prop_cell(coord, WORLD_PROP_CATALOG.EMPTY)
 
 
 ## Client asks host to break a tile.
@@ -321,6 +355,20 @@ func _request_break_tile(tx: int, ty: int) -> void:
 	GameEvents.block_broken.emit(coord, tile_id)
 
 
+@rpc("any_peer", "reliable")
+func _request_break_prop(tx: int, ty: int) -> void:
+	if not multiplayer.is_server():
+		return
+	var coord := Vector2i(tx, ty)
+	var prop_id: int = get_prop_at(coord)
+	if prop_id == WORLD_PROP_CATALOG.EMPTY:
+		return
+
+	_do_break_prop(coord)
+	_sync_break_prop.rpc(tx, ty, prop_id)
+	GameEvents.prop_broken.emit(coord, prop_id)
+
+
 ## Host tells all clients a tile was broken.
 @rpc("authority", "reliable")
 func _sync_break_tile(tx: int, ty: int) -> void:
@@ -328,6 +376,13 @@ func _sync_break_tile(tx: int, ty: int) -> void:
 	var tile_id: int = get_top_tile_at(coord)
 	_do_break_tile(coord)
 	GameEvents.block_broken.emit(coord, tile_id)
+
+
+@rpc("authority", "reliable")
+func _sync_break_prop(tx: int, ty: int, prop_id: int) -> void:
+	var coord := Vector2i(tx, ty)
+	_do_break_prop(coord)
+	GameEvents.prop_broken.emit(coord, prop_id)
 
 
 # --- Block placing ---
@@ -338,9 +393,15 @@ func _sync_break_tile(tx: int, ty: int) -> void:
 func can_place_top_tile_at(coord: Vector2i) -> bool:
 	if get_top_tile_at(coord) != TileProperties.EMPTY:
 		return false
+	if get_prop_at(coord) != WORLD_PROP_CATALOG.EMPTY:
+		return false
 	var ground_id: int = get_ground_tile_at(coord)
 	var ground_props := GroundTileProperties.get_properties(ground_id)
 	return ground_props != null and ground_props.is_solid
+
+
+func can_place_prop_at(coord: Vector2i) -> bool:
+	return can_place_top_tile_at(coord)
 
 
 ## Server-only: places a tile and syncs to all clients.
@@ -351,6 +412,15 @@ func place_tile(coord: Vector2i, tile_id: int) -> void:
 	_do_place_tile(coord, resolved_tile_id)
 	_sync_place_tile.rpc(coord.x, coord.y, resolved_tile_id)
 	GameEvents.block_placed.emit(coord, resolved_tile_id)
+
+
+func place_prop(coord: Vector2i, prop_id: int) -> void:
+	if not multiplayer.is_server():
+		return
+	var resolved_prop_id: int = WORLD_PROP_CATALOG.resolve_placement_prop_id(prop_id)
+	_do_place_prop(coord, resolved_prop_id)
+	_sync_place_prop.rpc(coord.x, coord.y, resolved_prop_id)
+	GameEvents.prop_placed.emit(coord, resolved_prop_id)
 
 
 ## Writes a single tile into the TileMapLayer and records the modification.
@@ -372,10 +442,33 @@ func _do_place_tile(coord: Vector2i, tile_id: int) -> void:
 	_apply_cell(coord, tile_id)
 
 
+func _do_place_prop(coord: Vector2i, prop_id: int) -> void:
+	var props = WORLD_PROP_CATALOG.get_definition(prop_id)
+	if props == null:
+		return
+
+	var chunk_x: int = floori(float(coord.x) / GameConstants.CHUNK_SIZE)
+	var chunk_y: int = floori(float(coord.y) / GameConstants.CHUNK_SIZE)
+	var chunk_coord := Vector2i(chunk_x, chunk_y)
+	if loaded_chunks.has(chunk_coord) and loaded_chunks[chunk_coord] != null:
+		var local_x: int = coord.x - chunk_x * GameConstants.CHUNK_SIZE
+		var local_y: int = coord.y - chunk_y * GameConstants.CHUNK_SIZE
+		var chunk: ChunkData = loaded_chunks[chunk_coord]
+		chunk.set_prop_modification(local_x, local_y, prop_id)
+
+	_apply_prop_cell(coord, prop_id)
+
+
 ## Host tells all clients a tile was placed.
 @rpc("authority", "reliable")
 func _sync_place_tile(tx: int, ty: int, tile_id: int) -> void:
 	_do_place_tile(Vector2i(tx, ty), tile_id)
+
+
+@rpc("authority", "reliable")
+func _sync_place_prop(tx: int, ty: int, prop_id: int) -> void:
+	_do_place_prop(Vector2i(tx, ty), prop_id)
+	GameEvents.prop_placed.emit(Vector2i(tx, ty), prop_id)
 
 
 ## Places or erases a single cell on terrain/base/decor layers.
@@ -405,6 +498,18 @@ func _apply_cell(cell: Vector2i, tile_id: int) -> void:
 			_erase_tall_structure_visual(cell)
 
 	_sync_tall_structure_visual(cell)
+
+
+func _apply_prop_cell(cell: Vector2i, prop_id: int) -> void:
+	if prop_id == WORLD_PROP_CATALOG.EMPTY:
+		_erase_world_prop_visual(cell)
+		return
+
+	var definition = WORLD_PROP_CATALOG.get_definition(prop_id)
+	if definition == null:
+		_erase_world_prop_visual(cell)
+		return
+	_ensure_world_prop_visual(cell, definition)
 
 
 func _sync_tall_structure_visual(coord: Vector2i) -> void:
@@ -440,6 +545,28 @@ func _erase_tall_structure_visual(coord: Vector2i) -> void:
 	if visual == null:
 		return
 	_tall_structure_visuals.erase(key)
+	visual.queue_free()
+
+
+func _ensure_world_prop_visual(coord: Vector2i, definition) -> void:
+	var key := _cell_key(coord)
+	var visual := _world_prop_visuals.get(key) as Node2D
+	if visual == null:
+		visual = WORLD_PROP_SCENE.instantiate() as Node2D
+		visual.name = "WorldProp_%s_%s" % [coord.x, coord.y]
+		world_props_node.add_child(visual)
+		_world_prop_visuals[key] = visual
+	visual.position = definition.get_world_position(coord)
+	if visual.has_method("configure"):
+		visual.configure(definition, coord)
+
+
+func _erase_world_prop_visual(coord: Vector2i) -> void:
+	var key := _cell_key(coord)
+	var visual := _world_prop_visuals.get(key) as Node
+	if visual == null:
+		return
+	_world_prop_visuals.erase(key)
 	visual.queue_free()
 
 
@@ -488,6 +615,18 @@ func get_top_tile_at(coord: Vector2i) -> int:
 	return chunk.get_top_tile(local_x, local_y)
 
 
+func get_prop_at(coord: Vector2i) -> int:
+	var chunk_x: int = floori(float(coord.x) / GameConstants.CHUNK_SIZE)
+	var chunk_y: int = floori(float(coord.y) / GameConstants.CHUNK_SIZE)
+	var chunk_coord := Vector2i(chunk_x, chunk_y)
+	var chunk: ChunkData = loaded_chunks.get(chunk_coord)
+	if chunk == null:
+		return WORLD_PROP_CATALOG.EMPTY
+	var local_x: int = coord.x - chunk_x * GameConstants.CHUNK_SIZE
+	var local_y: int = coord.y - chunk_y * GameConstants.CHUNK_SIZE
+	return chunk.get_prop(local_x, local_y)
+
+
 ## Returns the ground tile ID at a world-space tile coordinate from chunk data.
 func get_ground_tile_at(coord: Vector2i) -> int:
 	var chunk_x: int = floori(float(coord.x) / GameConstants.CHUNK_SIZE)
@@ -499,3 +638,29 @@ func get_ground_tile_at(coord: Vector2i) -> int:
 	var local_x: int = coord.x - chunk_x * GameConstants.CHUNK_SIZE
 	var local_y: int = coord.y - chunk_y * GameConstants.CHUNK_SIZE
 	return chunk.get_ground_tile(local_x, local_y)
+
+
+func _migrate_legacy_prop_modifications(chunk: ChunkData) -> void:
+	var top_keys := chunk.top_modifications.keys()
+	for key_variant in top_keys:
+		var key := int(key_variant)
+		var tile_id := int(
+			chunk.top_modifications.get(key_variant, chunk.top_modifications.get(key, TileProperties.EMPTY))
+		)
+		var prop_id := _legacy_prop_id_from_tile_id(tile_id)
+		if prop_id != WORLD_PROP_CATALOG.EMPTY:
+			if not chunk.prop_modifications.has(key):
+				chunk.prop_modifications[key] = prop_id
+			chunk.top_modifications.erase(key_variant)
+			if key_variant != key:
+				chunk.top_modifications.erase(key)
+			continue
+		if chunk.prop_base_cells.has(key):
+			chunk.prop_modifications[key] = WORLD_PROP_CATALOG.EMPTY
+
+
+func _legacy_prop_id_from_tile_id(tile_id: int) -> int:
+	var tile_props := TileProperties.get_properties(tile_id)
+	if tile_props == null:
+		return WORLD_PROP_CATALOG.EMPTY
+	return int(WORLD_PROP_CATALOG.by_name.get(tile_props.name, WORLD_PROP_CATALOG.EMPTY))

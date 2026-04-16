@@ -27,6 +27,16 @@ signal block_broken(coord: Vector2i, tile_id: int)
 @warning_ignore("unused_signal")
 signal block_placed(coord: Vector2i, tile_id: int)
 
+## A world prop was broken and removed from the world.
+## Fired by: ChunkManager
+@warning_ignore("unused_signal")
+signal prop_broken(coord: Vector2i, prop_id: int)
+
+## A world prop was placed into the world.
+## Fired by: ChunkManager
+@warning_ignore("unused_signal")
+signal prop_placed(coord: Vector2i, prop_id: int)
+
 ## A placed structure was broken and removed from the world.
 ## Fired by: StructureManager
 @warning_ignore("unused_signal")

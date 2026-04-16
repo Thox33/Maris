@@ -1,4 +1,5 @@
 extends HumanoidActor
+const WORLD_PROP_CATALOG := preload("res://scripts/world/world_prop_catalog.gd")
 ## Player controller with top-down movement physics.
 ## Only the owning peer processes input. Remote peers are rendered from a
 ## short snapshot buffer for smoother movement.
@@ -220,8 +221,8 @@ func get_look_direction() -> Vector2:
 	return _look_dir
 
 
-## Returns the movement speed factor for the top tile at the player's center position.
-## 1.0 = empty cell, < 1.0 = slowed by non-solid decor (e.g. coral).
+## Returns the movement speed factor for the world content at the player's center position.
+## 1.0 = empty cell, < 1.0 = slowed by non-solid props or top tiles.
 func _get_tile_speed_factor() -> float:
 	if _chunk_manager == null:
 		return 1.0
@@ -230,6 +231,12 @@ func _get_tile_speed_factor() -> float:
 		floori(global_position.x / GameConstants.TILE_SIZE),
 		floori(global_position.y / GameConstants.TILE_SIZE),
 	)
+	var prop_id: int = _chunk_manager.get_prop_at(tile_coord)
+	if prop_id != WORLD_PROP_CATALOG.EMPTY:
+		var prop_definition = WORLD_PROP_CATALOG.get_definition(prop_id)
+		if prop_definition != null:
+			return prop_definition.move_speed_factor
+
 	var tile_id: int = _chunk_manager.get_top_tile_at(tile_coord)
 	if tile_id == TileProperties.EMPTY:
 		return 1.0

@@ -42,6 +42,9 @@ tile_set = ExtResource("2")
 y_sort_enabled = true
 y_sort_origin = 16
 
+[node name="WorldProps" type="Node2D" parent="DepthSorted"]
+y_sort_enabled = true
+
 [node name="Players" type="Node2D" parent="DepthSorted"]
 y_sort_enabled = true
 

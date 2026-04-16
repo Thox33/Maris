@@ -1,6 +1,7 @@
 extends Node
 
 const ITEM_ENTITY_SCENE := preload("res://scenes/items/item_entity.tscn")
+const WORLD_PROP_CATALOG := preload("res://scripts/world/world_prop_catalog.gd")
 
 var _item_spawner: MultiplayerSpawner
 var _inventory_manager: Node
@@ -13,6 +14,7 @@ func setup(item_spawner: MultiplayerSpawner, inventory_manager: Node) -> void:
 	if _is_initialized:
 		return
 	GameEvents.block_broken.connect(_on_block_broken)
+	GameEvents.prop_broken.connect(_on_prop_broken)
 	GameEvents.structure_broken.connect(_on_structure_broken)
 	_is_initialized = true
 
@@ -78,3 +80,22 @@ func _on_structure_broken(structure_id: String, world_pos: Vector2) -> void:
 	if item_id == ItemProperties.NONE:
 		return
 	spawn_item_drop(item_id, 1, world_pos)
+
+
+func _on_prop_broken(coord: Vector2i, prop_id: int) -> void:
+	if not multiplayer.is_server():
+		return
+
+	var definition = WORLD_PROP_CATALOG.get_definition(prop_id)
+	if definition == null:
+		return
+
+	var item_id: int = ItemProperties.from_prop(definition.drop_prop_id)
+	if item_id == ItemProperties.NONE:
+		return
+
+	var tile_center := Vector2(
+		coord.x * GameConstants.TILE_SIZE + GameConstants.TILE_SIZE / 2.0,
+		coord.y * GameConstants.TILE_SIZE + GameConstants.TILE_SIZE / 2.0
+	)
+	spawn_item_drop(item_id, 1, tile_center)

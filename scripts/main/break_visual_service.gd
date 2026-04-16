@@ -1,6 +1,8 @@
 extends Node
+const WORLD_PROP_CATALOG := preload("res://scripts/world/world_prop_catalog.gd")
 
 const TARGET_KIND_TILE := "tile"
+const TARGET_KIND_PROP := "prop"
 const TARGET_KIND_STRUCTURE := "structure"
 
 const _SAMPLE_COUNT: int = 12
@@ -26,6 +28,7 @@ func setup(p_world: Node2D, p_visual_parent: Node2D) -> void:
 	_ensure_visual_root()
 	_ensure_crack_texture()
 	GameEvents.block_broken.connect(_on_block_broken)
+	GameEvents.prop_broken.connect(_on_prop_broken)
 	GameEvents.structure_broken.connect(_on_structure_broken)
 
 
@@ -57,7 +60,10 @@ func clear_damaged_target(target_key: String) -> void:
 
 
 func _resolve_cells(target_data: Dictionary) -> Array[Vector2i]:
-	if String(target_data.get("kind", "")) == TARGET_KIND_TILE:
+	if (
+		String(target_data.get("kind", "")) == TARGET_KIND_TILE
+		or String(target_data.get("kind", "")) == TARGET_KIND_PROP
+	):
 		return [Vector2i(int(target_data.get("coord_x", 0)), int(target_data.get("coord_y", 0)))]
 
 	var structure_id := String(target_data.get("structure_id", ""))
@@ -183,6 +189,10 @@ func _on_structure_broken(structure_id: String, world_pos: Vector2) -> void:
 	_spawn_break_particles(world_pos, _sample_structure_colors(structure_id))
 
 
+func _on_prop_broken(coord: Vector2i, prop_id: int) -> void:
+	_spawn_break_particles(_cell_center(coord), _sample_prop_colors(prop_id))
+
+
 func _sample_tile_colors(tile_id: int) -> Array[Color]:
 	if _tile_colors_cache.has(tile_id):
 		return _tile_colors_cache[tile_id]
@@ -231,6 +241,31 @@ func _sample_structure_colors(structure_id: String) -> Array[Color]:
 		sampled.append(Color.WHITE)
 
 	_tile_colors_cache["s:" + structure_id] = sampled
+	return sampled
+
+
+func _sample_prop_colors(prop_id: int) -> Array[Color]:
+	var cache_key := "p:%s" % prop_id
+	if _tile_colors_cache.has(cache_key):
+		return _tile_colors_cache[cache_key]
+
+	var definition = WORLD_PROP_CATALOG.get_definition(prop_id)
+	if definition == null:
+		return [Color.WHITE]
+
+	var image := _load_atlas_image(definition.atlas_texture_path)
+	if image == null:
+		return [Color.WHITE]
+
+	var ts := GameConstants.TILE_SIZE
+	var sampled := _sample_region(
+		image,
+		definition.atlas_coord.x * ts,
+		definition.atlas_coord.y * ts,
+		ts,
+		ts
+	)
+	_tile_colors_cache[cache_key] = sampled
 	return sampled
 
 

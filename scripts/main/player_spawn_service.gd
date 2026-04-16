@@ -2,6 +2,7 @@ extends Node
 
 const PLAYER_SCENE := preload("res://scenes/player/player.tscn")
 const CHARACTER_APPEARANCE := preload("res://scripts/actor/character_appearance.gd")
+const WORLD_PROP_CATALOG := preload("res://scripts/world/world_prop_catalog.gd")
 const SPAWN_SEARCH_X := 0
 const SPAWN_SEARCH_Y_RANGE := 40
 
@@ -82,7 +83,10 @@ func _find_clear_spawn() -> Vector2:
 			var ground_id: int = cm.get_ground_tile_at(coord)
 			var ground_props := GroundTileProperties.get_properties(ground_id)
 			if ground_props != null and ground_props.is_solid:
-				if cm.get_top_tile_at(coord) == TileProperties.EMPTY:
+				if (
+					cm.get_top_tile_at(coord) == TileProperties.EMPTY
+					and cm.get_prop_at(coord) == WORLD_PROP_CATALOG.EMPTY
+				):
 					return Vector2(
 						coord.x * GameConstants.TILE_SIZE + GameConstants.TILE_SIZE / 2.0,
 						coord.y * GameConstants.TILE_SIZE + GameConstants.TILE_SIZE / 2.0

@@ -1,4 +1,5 @@
 extends Node2D
+const WORLD_PROP_CATALOG := preload("res://scripts/world/world_prop_catalog.gd")
 ## Handles block breaking and placing interaction for the player.
 ## Breaking: tracks progress, shows crack overlay, delegates to ChunkManager.
 ## Placing: sends intent (slot + coord) to InventoryManager for host validation.
@@ -101,7 +102,11 @@ func _handle_placing() -> void:
 		return
 
 	var coord := _terrain_layer.local_to_map(mouse_world)
-	if _terrain_layer.get_cell_atlas_coords(coord) != Vector2i(-1, -1):
+	if _chunk_manager != null and _chunk_manager.get_top_tile_at(coord) != TileProperties.EMPTY:
+		return
+	if _chunk_manager != null and _chunk_manager.get_prop_at(coord) != WORLD_PROP_CATALOG.EMPTY:
+		return
+	if _structure_manager != null and _structure_manager.is_cell_occupied(coord):
 		return
 
 	_request_place_block(coord)
@@ -135,7 +140,11 @@ func _handle_held_item_placing() -> void:
 		return
 
 	var coord := _terrain_layer.local_to_map(mouse_world)
-	if _terrain_layer.get_cell_atlas_coords(coord) != Vector2i(-1, -1):
+	if _chunk_manager != null and _chunk_manager.get_top_tile_at(coord) != TileProperties.EMPTY:
+		return
+	if _chunk_manager != null and _chunk_manager.get_prop_at(coord) != WORLD_PROP_CATALOG.EMPTY:
+		return
+	if _structure_manager != null and _structure_manager.is_cell_occupied(coord):
 		return
 
 	_request_place_held_block(coord)
@@ -159,6 +168,12 @@ func _is_mouse_over_world_blocking_ui() -> bool:
 
 func _has_breakable_target(coord: Vector2i) -> bool:
 	if _chunk_manager != null:
+		var prop_id: int = _chunk_manager.get_prop_at(coord)
+		if prop_id != WORLD_PROP_CATALOG.EMPTY:
+			var prop_definition = WORLD_PROP_CATALOG.get_definition(prop_id)
+			if prop_definition != null and prop_definition.breakable:
+				return true
+
 		var tile_id: int = _chunk_manager.get_top_tile_at(coord)
 		if tile_id != TileProperties.EMPTY:
 			var props: TileProperties = TileProperties.get_properties(tile_id)

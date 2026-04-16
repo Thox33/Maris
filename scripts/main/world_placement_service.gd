@@ -42,6 +42,14 @@ func validate_and_place_world_item(sender_id: int, item_id: int, coord: Vector2i
 		chunk_manager.place_tile(coord, item_props.tile_id)
 		return true
 
+	if item_props.places_prop():
+		if not chunk_manager.can_place_prop_at(coord):
+			return false
+		if structure_manager != null and structure_manager.is_cell_occupied(coord):
+			return false
+		chunk_manager.place_prop(coord, item_props.prop_id)
+		return true
+
 	if item_props.places_structure():
 		if structure_manager == null:
 			return false

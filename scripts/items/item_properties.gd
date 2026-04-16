@@ -14,6 +14,7 @@ const INVALID_ICON_COORD := Vector2i(-1, -1)
 enum PlacementKind {
 	NONE,
 	TILE,
+	PROP,
 	STRUCTURE,
 }
 
@@ -25,14 +26,15 @@ enum ToolKind {
 ## Master registry: stable integer ID -> ItemProperties.
 ## To add an item: append a new entry with the next unused ID.
 static var registry: Dictionary = {
-	0: ItemProperties.new(0, "sand", 64, PlacementKind.TILE, 0, "", 0),
-	1: ItemProperties.new(1, "stone", 64, PlacementKind.TILE, 1, "", 1),
-	2: ItemProperties.new(2, "coral", 64, PlacementKind.TILE, 2, "", 2),
+	0: ItemProperties.new(0, "sand", 64, PlacementKind.TILE, 0, -1, "", 0),
+	1: ItemProperties.new(1, "stone", 64, PlacementKind.TILE, 1, -1, "", 1),
+	2: ItemProperties.new(2, "coral", 64, PlacementKind.PROP, -1, 0, "", 2),
 	3: ItemProperties.new(
 		3,
 		"large_furnace",
 		16,
 		PlacementKind.STRUCTURE,
+		-1,
 		-1,
 		"large_furnace",
 		1
@@ -42,6 +44,7 @@ static var registry: Dictionary = {
 		"stone_pickaxe",
 		1,
 		PlacementKind.NONE,
+		-1,
 		-1,
 		"",
 		1,
@@ -73,6 +76,8 @@ var max_stack: int
 var placement_kind: PlacementKind
 ## Which tile this item places when used. -1 = not a tile-placement item.
 var tile_id: int
+## Which world prop this item places when used. -1 = not a prop-placement item.
+var prop_id: int
 ## Which structure this item places when used. Empty = not a structure-placement item.
 var structure_id: String
 ## Tile used to render this item in the UI/world.
@@ -101,6 +106,7 @@ func _init(
 	p_max_stack: int,
 	p_placement_kind: PlacementKind,
 	p_tile_id: int = -1,
+	p_prop_id: int = -1,
 	p_structure_id: String = "",
 	p_icon_tile_id: int = -1,
 	p_break_damage: float = GameConstants.BREAK_BASE_DAMAGE,
@@ -117,6 +123,7 @@ func _init(
 	max_stack = p_max_stack
 	placement_kind = p_placement_kind
 	tile_id = p_tile_id
+	prop_id = p_prop_id
 	structure_id = p_structure_id
 	icon_tile_id = p_icon_tile_id if p_icon_tile_id >= 0 else p_tile_id
 	icon_atlas_path = p_icon_atlas_path
@@ -142,6 +149,13 @@ static func from_tile(p_tile_id: int) -> int:
 	return NONE
 
 
+static func from_prop(p_prop_id: int) -> int:
+	for item_id: int in registry:
+		if (registry[item_id] as ItemProperties).prop_id == p_prop_id:
+			return item_id
+	return NONE
+
+
 static func from_structure(p_structure_id: String) -> int:
 	for item_id: int in registry:
 		if (registry[item_id] as ItemProperties).structure_id == p_structure_id:
@@ -156,6 +170,10 @@ func is_placeable() -> bool:
 
 func places_tile() -> bool:
 	return placement_kind == PlacementKind.TILE and tile_id != -1
+
+
+func places_prop() -> bool:
+	return placement_kind == PlacementKind.PROP and prop_id != -1
 
 
 func places_structure() -> bool:
