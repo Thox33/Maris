@@ -47,7 +47,9 @@ func _ready() -> void:
 	_item_spawner.spawn_function = Callable(_world_drop_service, "create_item_entity")
 
 	_world_placement_service.setup(_players, world.chunk_manager, world.structure_manager)
-	inventory_manager.setup(_inventory_authority_service, _world_placement_service)
+	inventory_manager.setup(
+		_inventory_authority_service, _world_placement_service, _players, _world_drop_service
+	)
 	_use_authority_service.setup(_players, world.chunk_manager, world.structure_manager, inventory_manager)
 	_break_visual_service.setup(world, world.depth_sorted)
 	_use_authority_service.damaged_target_updated.connect(

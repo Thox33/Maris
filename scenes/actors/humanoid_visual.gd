@@ -20,7 +20,6 @@ var _appearance: Dictionary = CHARACTER_APPEARANCE.create_default_appearance()
 var _current_animation: String = ""
 var _held_item_grip_offset: Vector2 = Vector2.ZERO
 var _profile: HumanoidVisualProfile
-var _inventory_manager: Node
 var _held_item_sprite: Sprite2D
 var _displayed_held_item_id: int = ITEM_PROPERTIES.NONE
 var _current_held_item_id: int = ITEM_PROPERTIES.NONE
@@ -86,8 +85,8 @@ func get_held_item_anchor() -> Node2D:
 	return _held_item_anchor
 
 
-func set_inventory_manager(inventory_manager: Node) -> void:
-	_inventory_manager = inventory_manager
+func set_inventory_manager(_inventory_manager: Node) -> void:
+	pass
 
 
 func set_held_item_grip_offset(offset: Vector2) -> void:

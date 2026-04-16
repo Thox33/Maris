@@ -67,11 +67,21 @@ const HOTBAR_SIZE: int = 10
 ## Radius (pixels) at which a player picks up a dropped item.
 const ITEM_PICKUP_RADIUS: float = 24.0
 ## Seconds after spawning before an item can be picked up.
-const ITEM_PICKUP_DELAY: float = 0.5
+const ITEM_PICKUP_DELAY: float = 0.7
 ## Seconds until a dropped item despawns.
 const ITEM_DESPAWN_TIME: float = 300.0
-## Vertical oscillation speed for floating items (pixels/sec).
-const ITEM_FLOAT_SPEED: float = 8.0
+## Vertical bob amplitude for floating items.
+const ITEM_FLOAT_SPEED: float = 5.0
+## Oscillation frequency multiplier for floating items.
+const ITEM_FLOAT_FREQUENCY: float = 3.0
+## Offset (pixels) in front of the player where manually dropped items spawn.
+const ITEM_DROP_FORWARD_OFFSET: float = 16.0
+## Forward launch speed (pixels/sec) applied to manually dropped items.
+const ITEM_DROP_LAUNCH_SPEED: float = 55.0
+## Random spread (pixels/sec) added to the launch velocity of manually dropped items.
+const ITEM_DROP_LAUNCH_SPREAD: float = 15.0
+## Rate (pixels/sec^2) at which dropped-item drift decays toward zero.
+const ITEM_DRIFT_DECAY: float = 140.0
 
 # --- Chat ---
 ## Maximum character length of a single chat message.

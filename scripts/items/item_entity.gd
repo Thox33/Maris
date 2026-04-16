@@ -50,15 +50,19 @@ func setup_inventory_manager(inventory_manager: Node) -> void:
 
 
 ## Called by the spawner's spawn_function to set item data and visuals.
-func initialize(p_item_id: int, p_count: int) -> void:
+## initial_velocity overrides the ambient random drift when non-zero.
+func initialize(p_item_id: int, p_count: int, initial_velocity: Vector2 = Vector2.ZERO) -> void:
 	item_id = p_item_id
 	count = p_count
 	_float_phase = randf() * TAU
-	# Random initial drift so items scatter slightly from the break point.
-	_drift_velocity = Vector2(
-		randf_range(-GameConstants.ITEM_DRIFT_SPEED, GameConstants.ITEM_DRIFT_SPEED),
-		randf_range(-GameConstants.ITEM_DRIFT_SPEED, GameConstants.ITEM_DRIFT_SPEED),
-	)
+	if initial_velocity.is_zero_approx():
+		# Random initial drift so items scatter slightly from the break point.
+		_drift_velocity = Vector2(
+			randf_range(-GameConstants.ITEM_DRIFT_SPEED, GameConstants.ITEM_DRIFT_SPEED),
+			randf_range(-GameConstants.ITEM_DRIFT_SPEED, GameConstants.ITEM_DRIFT_SPEED),
+		)
+	else:
+		_drift_velocity = initial_velocity
 	_setup_sprite()
 
 
@@ -87,7 +91,8 @@ func _physics_process(delta: float) -> void:
 	if _lifetime >= GameConstants.ITEM_PICKUP_DELAY:
 		_update_pickup_target()
 		if _pickup_target != null:
-			var to_target := _pickup_target.global_position - global_position
+			var target_pos := _get_pickup_target_position(_pickup_target)
+			var to_target := target_pos - global_position
 			if to_target.length() <= 8.0:
 				_try_pickup(_pickup_target)
 				if is_queued_for_deletion():
@@ -99,11 +104,13 @@ func _physics_process(delta: float) -> void:
 				return
 
 	# Gentle ambient floating: sinusoidal vertical bob.
-	_float_phase += delta * 2.0
+	_float_phase += delta * GameConstants.ITEM_FLOAT_FREQUENCY
 	var float_offset := sin(_float_phase) * GameConstants.ITEM_FLOAT_SPEED
 
 	# Drift decays over time so dropped items settle naturally.
-	_drift_velocity = _drift_velocity.move_toward(Vector2.ZERO, 20.0 * delta)
+	_drift_velocity = _drift_velocity.move_toward(
+		Vector2.ZERO, GameConstants.ITEM_DRIFT_DECAY * delta
+	)
 
 	velocity = _drift_velocity + Vector2(0.0, float_offset)
 	move_and_slide()
@@ -173,6 +180,14 @@ func _is_valid_pickup_body(body: Node2D) -> bool:
 	return body != null and is_instance_valid(body) and body.is_in_group("players")
 
 
+## Returns the target point items should fly toward — the humanoid body center
+## if the actor exposes one, otherwise the actor's root (feet).
+func _get_pickup_target_position(body: Node2D) -> Vector2:
+	if body.has_method("get_body_center_global"):
+		return body.get_body_center_global()
+	return body.global_position
+
+
 func _is_body_in_pickup_range(body: Node2D) -> bool:
 	return body in $PickupArea.get_overlapping_bodies()
 
@@ -190,4 +205,4 @@ func _setup_sprite() -> void:
 	sprite.texture = icon_texture
 	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	# Scale down slightly so the drop looks smaller than a placed tile.
-	sprite.scale = Vector2(0.65, 0.65)
+	sprite.scale = Vector2(0.55, 0.55)

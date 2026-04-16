@@ -33,3 +33,7 @@ start-claude.bat
 
 # Logs
 *.log
+
+# AI run artifacts
+.ai/runs/*
+!.ai/runs/.gitkeep

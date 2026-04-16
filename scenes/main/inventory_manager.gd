@@ -11,11 +11,20 @@ var local_held_slot: Dictionary = {"item_id": ItemProperties.NONE, "count": 0}
 
 var _authority_service: Node
 var _world_placement_service: Node
+var _players_node: Node
+var _world_drop_service: Node
 
 
-func setup(authority_service: Node, world_placement_service: Node) -> void:
+func setup(
+	authority_service: Node,
+	world_placement_service: Node,
+	players_node: Node,
+	world_drop_service: Node,
+) -> void:
 	_authority_service = authority_service
 	_world_placement_service = world_placement_service
+	_players_node = players_node
+	_world_drop_service = world_drop_service
 	_authority_service.setup(
 		Callable(self, "_sync_full_inventory_to_peer"),
 		Callable(self, "_sync_slot_to_peer"),
@@ -170,6 +179,53 @@ func _request_pickup_matching_item(item_id: int) -> void:
 	if not multiplayer.is_server():
 		return
 	_authority_service.pickup_matching_item(_get_sender_id(), item_id)
+
+
+@rpc("any_peer", "reliable")
+func _request_drop_slot(slot_index: int, whole_stack: bool) -> void:
+	if not multiplayer.is_server():
+		return
+	var sender_id := _get_sender_id()
+	var drop: Dictionary = _authority_service.drop_from_slot(sender_id, slot_index, whole_stack)
+	_spawn_drop_for_peer(sender_id, drop)
+
+
+@rpc("any_peer", "reliable")
+func _request_drop_held(whole_stack: bool) -> void:
+	if not multiplayer.is_server():
+		return
+	var sender_id := _get_sender_id()
+	var drop: Dictionary = _authority_service.drop_from_held(sender_id, whole_stack)
+	_spawn_drop_for_peer(sender_id, drop)
+
+
+func _spawn_drop_for_peer(peer_id: int, drop: Dictionary) -> void:
+	if _is_empty_slot(drop):
+		return
+	if _world_drop_service == null or _players_node == null:
+		return
+
+	var player_node := _players_node.get_node_or_null(str(peer_id))
+	if player_node == null:
+		return
+
+	var look_dir: Vector2 = Vector2.DOWN
+	if player_node.has_method("get_look_direction"):
+		var reported: Vector2 = player_node.get_look_direction()
+		if not reported.is_zero_approx():
+			look_dir = reported.normalized()
+
+	var body_center: Vector2 = player_node.global_position
+	if player_node.has_method("get_body_center_global"):
+		body_center = player_node.get_body_center_global()
+
+	var drop_pos: Vector2 = body_center + look_dir * GameConstants.ITEM_DROP_FORWARD_OFFSET
+	var launch_velocity := look_dir * GameConstants.ITEM_DROP_LAUNCH_SPEED
+	launch_velocity += Vector2(
+		randf_range(-GameConstants.ITEM_DROP_LAUNCH_SPREAD, GameConstants.ITEM_DROP_LAUNCH_SPREAD),
+		randf_range(-GameConstants.ITEM_DROP_LAUNCH_SPREAD, GameConstants.ITEM_DROP_LAUNCH_SPREAD),
+	)
+	_world_drop_service.spawn_item_drop(drop["item_id"], drop["count"], drop_pos, launch_velocity)
 
 
 func _get_sender_id() -> int:

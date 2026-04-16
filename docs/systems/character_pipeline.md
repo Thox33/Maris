@@ -64,7 +64,7 @@ Owns:
 - network authority and remote smoothing
 - character identity such as display name
 - persistent character appearance data
-- held-item state derived from the selected hotbar slot
+- held-item presentation state derived from `InventoryManager.local_held_slot`, with selected hotbar fallback
 
 Does not own:
 
@@ -286,7 +286,8 @@ Held-item visuals are part of the humanoid pipeline already.
 
 Current behavior:
 
-- the actor resolves `held_item_id` from the selected hotbar slot
+- the local actor resolves `held_item_id` from `InventoryManager.local_held_slot` when that cursor-held stack is non-empty
+- when no cursor-held stack exists, the actor falls back to the selected hotbar slot
 - `HumanoidVisual` creates a held-item sprite under `HeldItemAnchor`
 - anchor position and rotation are driven by `HumanoidVisualProfile`
 - item-specific hold scale and grip point come from `ItemProperties`

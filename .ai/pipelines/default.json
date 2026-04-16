@@ -1,0 +1,35 @@
+{
+  "name": "default",
+  "description": "Default autonomous pipeline for concrete feature work.",
+  "stages": [
+    {
+      "name": "planner",
+      "role": "planner",
+      "provider": "claude",
+      "enabled": true
+    },
+    {
+      "name": "builder",
+      "role": "builder",
+      "provider": "codex",
+      "enabled": true
+    },
+    {
+      "name": "reviewer",
+      "role": "reviewer",
+      "provider": "codex",
+      "enabled": true
+    }
+  ],
+  "autonomy": {
+    "run_without_confirmation": true,
+    "stop_on_reviewer_fail": true,
+    "max_fix_loops": 0
+  },
+  "post_run": {
+    "summarize_iterations": true,
+    "retrospective": true,
+    "suggest_commit": true,
+    "cleanup_run_artifacts": true
+  }
+}

@@ -27,6 +27,7 @@ The documentation is organized by document type, not by age or by whatever file 
 - [`plans/animation_and_character_plan.md`](plans/animation_and_character_plan.md)
 - [`plans/overworld_biomes_plan.md`](plans/overworld_biomes_plan.md)
 - [`plans/overworld_migration_plan.md`](plans/overworld_migration_plan.md)
+- [`plans/world_prop_rendering_plan.md`](plans/world_prop_rendering_plan.md)
 
 ## Documentation Rules
 

@@ -8,6 +8,7 @@ const CHARACTER_APPEARANCE := preload("res://scripts/actor/character_appearance.
 const ITEM_PROPERTIES := preload("res://scripts/items/item_properties.gd")
 
 var _humanoid_visual: HumanoidVisual
+var _body_center_anchor: Node2D
 var _appearance: Dictionary = CHARACTER_APPEARANCE.create_default_appearance()
 var _held_item_id: int = ITEM_PROPERTIES.NONE
 var _equipped_head_item_id: int = ITEM_PROPERTIES.NONE
@@ -18,6 +19,17 @@ func _ready() -> void:
 	_humanoid_visual = get_node_or_null("VisualRoot/HumanoidVisual") as HumanoidVisual
 	if _humanoid_visual != null:
 		_humanoid_visual.setup(self)
+	_body_center_anchor = get_node_or_null("BodyCenterAnchor") as Node2D
+
+
+## Returns the humanoid's visual/body center in world space.
+## Root position is on the feet (needed for tile math); this anchor sits at the
+## torso so drops, pickup attraction and similar visual-centric logic target a
+## natural point on the character.
+func get_body_center_global() -> Vector2:
+	if _body_center_anchor != null:
+		return _body_center_anchor.global_position
+	return global_position
 
 
 func apply_appearance(appearance: Dictionary) -> void:

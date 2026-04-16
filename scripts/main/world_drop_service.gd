@@ -21,12 +21,21 @@ func create_item_entity(data: Dictionary) -> Node:
 	var entity := ITEM_ENTITY_SCENE.instantiate()
 	if entity.has_method("setup_inventory_manager"):
 		entity.setup_inventory_manager(_inventory_manager)
-	entity.initialize(data["item_id"], data["count"])
+	var initial_velocity := Vector2(
+		float(data.get("vx", 0.0)),
+		float(data.get("vy", 0.0)),
+	)
+	entity.initialize(data["item_id"], data["count"], initial_velocity)
 	entity.position = Vector2(data["x"], data["y"])
 	return entity
 
 
-func spawn_item_drop(item_id: int, count: int, world_pos: Vector2) -> void:
+func spawn_item_drop(
+	item_id: int,
+	count: int,
+	world_pos: Vector2,
+	initial_velocity: Vector2 = Vector2.ZERO,
+) -> void:
 	if not multiplayer.is_server():
 		return
 	_item_spawner.spawn(
@@ -35,6 +44,8 @@ func spawn_item_drop(item_id: int, count: int, world_pos: Vector2) -> void:
 			"count": count,
 			"x": world_pos.x,
 			"y": world_pos.y,
+			"vx": initial_velocity.x,
+			"vy": initial_velocity.y,
 		}
 	)
 

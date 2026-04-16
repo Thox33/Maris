@@ -5,6 +5,7 @@ extends CanvasLayer
 const ITEM_ICON_VISUALS := preload("res://scripts/items/item_icon_visuals.gd")
 const WORLD_INPUT_BLOCKER_GROUP := &"world_input_blocking_ui"
 const INVENTORY_TOGGLE_ACTION := &"inventory_toggle"
+const DROP_ITEM_ACTION := &"drop_item"
 const SLOT_SIZE := 40.0
 const SLOT_ICON_SIZE := 20.0
 const SLOT_SPACING := 2
@@ -118,6 +119,11 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		if not ChatManager.is_chat_open and _is_inventory_toggle_key(event):
 			_toggle_inventory()
+			get_viewport().set_input_as_handled()
+			return
+
+		if not ChatManager.is_chat_open and _is_drop_item_key(event):
+			_handle_drop_item_key(event.shift_pressed)
 			get_viewport().set_input_as_handled()
 			return
 
@@ -684,6 +690,54 @@ func _is_inventory_toggle_key(event: InputEventKey) -> bool:
 		or event.keycode == KEY_E
 		or event.physical_keycode == KEY_E
 	)
+
+
+func _is_drop_item_key(event: InputEventKey) -> bool:
+	return (
+		event.is_action_pressed(DROP_ITEM_ACTION)
+		or event.keycode == KEY_Q
+		or event.physical_keycode == KEY_Q
+	)
+
+
+func _handle_drop_item_key(whole_stack: bool) -> void:
+	if _inventory_manager == null or _inventory_manager.local_inventory == null:
+		return
+
+	if _hovered_slot_index >= 0:
+		var hovered_slot: Dictionary = _inventory_manager.local_inventory.get_slot(
+			_hovered_slot_index
+		)
+		if hovered_slot.get("item_id", ItemProperties.NONE) != ItemProperties.NONE:
+			_request_drop_slot(_hovered_slot_index, whole_stack)
+		return
+
+	if _has_local_held_slot():
+		_request_drop_held(whole_stack)
+		return
+
+	if _selected_index >= 0 and _selected_index < GameConstants.HOTBAR_SIZE:
+		var hotbar_slot: Dictionary = _inventory_manager.local_inventory.get_slot(_selected_index)
+		if hotbar_slot.get("item_id", ItemProperties.NONE) != ItemProperties.NONE:
+			_request_drop_slot(_selected_index, whole_stack)
+
+
+func _request_drop_slot(slot_index: int, whole_stack: bool) -> void:
+	if multiplayer.multiplayer_peer == null:
+		return
+	if multiplayer.is_server():
+		_inventory_manager._request_drop_slot(slot_index, whole_stack)
+	else:
+		_inventory_manager._request_drop_slot.rpc_id(1, slot_index, whole_stack)
+
+
+func _request_drop_held(whole_stack: bool) -> void:
+	if multiplayer.multiplayer_peer == null:
+		return
+	if multiplayer.is_server():
+		_inventory_manager._request_drop_held(whole_stack)
+	else:
+		_inventory_manager._request_drop_held.rpc_id(1, whole_stack)
 
 
 func _build_slot_icon_texture(item_id: int) -> Texture2D:

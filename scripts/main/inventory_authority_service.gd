@@ -168,6 +168,47 @@ func pickup_matching_item(peer_id: int, item_id: int) -> void:
 	_server_pickup_matching_item(peer_id, inv, item_id)
 
 
+## Removes items from a slot and returns what should be dropped into the world.
+## whole_stack=true drops the whole slot, otherwise one item.
+func drop_from_slot(peer_id: int, slot_index: int, whole_stack: bool) -> Dictionary:
+	if not multiplayer.is_server():
+		return _empty_slot()
+	var inv: Inventory = _inventories.get(peer_id)
+	if inv == null:
+		return _empty_slot()
+	if slot_index < 0 or slot_index >= inv.size:
+		return _empty_slot()
+
+	var slot: Dictionary = inv.get_slot(slot_index)
+	if _is_empty_slot(slot):
+		return _empty_slot()
+
+	var drop_count: int = slot["count"] if whole_stack else 1
+	var remaining: int = slot["count"] - drop_count
+	if remaining <= 0:
+		inv.set_slot(slot_index, ItemProperties.NONE, 0)
+	else:
+		inv.set_slot(slot_index, slot["item_id"], remaining)
+
+	_sync_slot_to_peer.call(peer_id, slot_index, inv.get_slot(slot_index))
+	return {"item_id": slot["item_id"], "count": drop_count}
+
+
+## Removes items from the held (cursor) slot and returns what should be dropped.
+func drop_from_held(peer_id: int, whole_stack: bool) -> Dictionary:
+	if not multiplayer.is_server():
+		return _empty_slot()
+	var held: Dictionary = _held_slots.get(peer_id, _empty_slot())
+	if _is_empty_slot(held):
+		return _empty_slot()
+
+	var drop_count: int = held["count"] if whole_stack else 1
+	var remaining: int = held["count"] - drop_count
+	var item_id: int = held["item_id"]
+	_set_held_slot(peer_id, item_id, remaining)
+	return {"item_id": item_id, "count": drop_count}
+
+
 func _server_pickup_full(peer_id: int, inv: Inventory, slot_index: int) -> void:
 	var held: Dictionary = _held_slots.get(peer_id, _empty_slot())
 	if not _is_empty_slot(held):
