@@ -102,10 +102,23 @@ func _on_line_edit_gui_input(event: InputEvent) -> void:
 	if event.physical_keycode == KEY_ESCAPE:
 		_close_chat()
 		get_viewport().set_input_as_handled()
+		return
+	if event.physical_keycode == KEY_UP:
+		_apply_history_text(ChatManager.navigate_local_input_history(-1, _line_edit.text))
+		get_viewport().set_input_as_handled()
+		return
+	if event.physical_keycode == KEY_DOWN:
+		_apply_history_text(ChatManager.navigate_local_input_history(1, _line_edit.text))
+		get_viewport().set_input_as_handled()
 
 
 func _on_line_edit_focus_exited() -> void:
 	_close_chat()
+
+
+func _apply_history_text(text: String) -> void:
+	_line_edit.text = text
+	_line_edit.caret_column = _line_edit.text.length()
 
 
 func _on_message_received(msg: Dictionary) -> void:

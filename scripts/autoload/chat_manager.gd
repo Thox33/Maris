@@ -3,11 +3,16 @@ extends Node
 ## Bridges client input to server-side processing and distributes messages back.
 ## Commands (text starting with "/") are routed to CommandRegistry on the server.
 
+const MAX_LOCAL_INPUT_HISTORY: int = 50
+
 var is_chat_open: bool = false
 var commands: CommandRegistry
 var _session_players: Node
 var _session_inventory_manager: Node
 var _session_chunk_manager: Node
+var _local_input_history: Array[String] = []
+var _local_input_history_index: int = 0
+var _local_input_draft: String = ""
 
 signal message_received(msg: Dictionary)
 
@@ -15,10 +20,9 @@ signal message_received(msg: Dictionary)
 func _ready() -> void:
 	commands = CommandRegistry.new()
 	commands.register("help", "Show all available commands.", _cmd_help)
-	commands.register("tp", "Teleport yourself to tile coordinates: /tp <x> <y>", _cmd_tp)
-	commands.register(
-		"teleport",
-		"Teleport yourself to tile coordinates: /teleport <x> <y>",
+	commands.register_aliases(
+		["tp", "teleport"],
+		"Teleport yourself to tile coordinates: /tp <x> <y>",
 		_cmd_tp
 	)
 	commands.register(
@@ -38,6 +42,7 @@ func submit(text: String) -> void:
 		return
 	if text.length() > GameConstants.MAX_CHAT_LENGTH:
 		text = text.left(GameConstants.MAX_CHAT_LENGTH)
+	_remember_local_input(text)
 	if multiplayer.multiplayer_peer == null:
 		return
 	if multiplayer.is_server():
@@ -48,10 +53,33 @@ func submit(text: String) -> void:
 
 func open_chat() -> void:
 	is_chat_open = true
+	reset_local_input_navigation()
 
 
 func close_chat() -> void:
 	is_chat_open = false
+	reset_local_input_navigation()
+
+
+func navigate_local_input_history(direction: int, current_text: String) -> String:
+	if _local_input_history.is_empty():
+		return current_text
+
+	var history_size := _local_input_history.size()
+	_local_input_history_index = clampi(_local_input_history_index, 0, history_size)
+	if _local_input_history_index == history_size:
+		_local_input_draft = current_text
+
+	_local_input_history_index = clampi(_local_input_history_index + direction, 0, history_size)
+	if _local_input_history_index == history_size:
+		return _local_input_draft
+
+	return _local_input_history[_local_input_history_index]
+
+
+func reset_local_input_navigation() -> void:
+	_local_input_history_index = _local_input_history.size()
+	_local_input_draft = ""
 
 
 func set_session_context(players_node: Node, inventory_manager: Node, chunk_manager: Node) -> void:
@@ -64,6 +92,8 @@ func clear_session_context() -> void:
 	_session_players = null
 	_session_inventory_manager = null
 	_session_chunk_manager = null
+	_local_input_history.clear()
+	reset_local_input_navigation()
 
 
 func _on_session_ended(_reason: String) -> void:
@@ -243,3 +273,10 @@ func _find_peer_id_by_visible_name(player_name: String) -> int:
 			return peer_id
 
 	return 0
+
+
+func _remember_local_input(text: String) -> void:
+	_local_input_history.append(text)
+	if _local_input_history.size() > MAX_LOCAL_INPUT_HISTORY:
+		_local_input_history.pop_front()
+	reset_local_input_navigation()
