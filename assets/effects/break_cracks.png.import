@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://ciiw26f42x8af"
-path="res://.godot/imported/tool_items_debug_crop.png-f8d506969aae98f59ae88a674c829a32.ctex"
+uid="uid://1fa6grscfwdn"
+path="res://.godot/imported/break_cracks.png-d69e404207e4b7b2671d702bee3989cf.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/tilesets/tool_items_debug_crop.png"
-dest_files=["res://.godot/imported/tool_items_debug_crop.png-f8d506969aae98f59ae88a674c829a32.ctex"]
+source_file="res://assets/effects/break_cracks.png"
+dest_files=["res://.godot/imported/break_cracks.png-d69e404207e4b7b2671d702bee3989cf.ctex"]
 
 [params]
 

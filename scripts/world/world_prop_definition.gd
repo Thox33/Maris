@@ -20,6 +20,9 @@ var sway_enabled: bool
 var sway_amount: float
 var sway_speed: float
 var rigid_base_px: float
+## Ground types this prop may be placed on (e.g. ["grass"], ["sand"]).
+## Empty array means any solid ground is allowed.
+var allowed_ground_names: Array[String]
 
 
 func _init(
@@ -39,6 +42,7 @@ func _init(
 	p_sway_speed: float = 3.0,
 	p_rigid_base_px: float = 0.0,
 	p_atlas_texture_path: String = DEFAULT_ATLAS_PATH,
+	p_allowed_ground_names: Array[String] = [],
 ) -> void:
 	id = p_id
 	name = p_name
@@ -56,6 +60,18 @@ func _init(
 	sway_speed = maxf(p_sway_speed, 0.0)
 	rigid_base_px = maxf(p_rigid_base_px, 0.0)
 	atlas_texture_path = p_atlas_texture_path
+	allowed_ground_names = p_allowed_ground_names.duplicate()
+
+
+## Returns true if the given ground name is valid for this prop.
+## Empty allowed_ground_names means any solid ground is accepted.
+func is_ground_allowed(ground_name: String) -> bool:
+	if allowed_ground_names.is_empty():
+		return true
+	for allowed in allowed_ground_names:
+		if ground_name.begins_with(allowed):
+			return true
+	return false
 
 
 func get_world_position(cell: Vector2i) -> Vector2:
@@ -66,8 +82,33 @@ func get_world_position(cell: Vector2i) -> Vector2:
 
 
 func get_sprite_offset() -> Vector2:
-	return -anchor_offset_px
+	return Vector2(-anchor_offset_px.x, -sprite_size_px.y)
 
 
 func build_collision_rects() -> Array[Dictionary]:
 	return collision_rects.duplicate(true)
+
+
+func get_hit_cell_offsets() -> Array[Vector2i]:
+	var rect := Rect2(Vector2(0.0, anchor_offset_px.y - sprite_size_px.y), sprite_size_px)
+	var min_x := floori(rect.position.x / float(GameConstants.TILE_SIZE))
+	var min_y := floori(rect.position.y / float(GameConstants.TILE_SIZE))
+	var max_x := ceili((rect.position.x + rect.size.x) / float(GameConstants.TILE_SIZE)) - 1
+	var max_y := ceili((rect.position.y + rect.size.y) / float(GameConstants.TILE_SIZE)) - 1
+
+	var offsets: Array[Vector2i] = []
+	for y in range(min_y, max_y + 1):
+		for x in range(min_x, max_x + 1):
+			offsets.append(Vector2i(x, y))
+	return offsets
+
+
+func covers_hit_cell(foot_cell: Vector2i, hit_cell: Vector2i) -> bool:
+	return hit_cell in get_hit_world_cells(foot_cell)
+
+
+func get_hit_world_cells(foot_cell: Vector2i) -> Array[Vector2i]:
+	var cells: Array[Vector2i] = []
+	for offset in get_hit_cell_offsets():
+		cells.append(foot_cell + offset)
+	return cells

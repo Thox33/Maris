@@ -4,6 +4,8 @@ extends Node
 
 const TALL_STRUCTURE_VISUAL_SCENE := preload("res://scenes/world/tall_structure_visual.tscn")
 
+signal breakable_world_visual_created(target_key: String, visual: Node)
+
 var world_generator: Node2D
 var chunk_manager: Node
 var depth_sorted_node: Node2D
@@ -232,10 +234,12 @@ func _spawn_structure_visual(
 	visual.configure_parts(
 		definition.build_visual_parts(),
 		true,
-		definition.build_collision_rects()
+		definition.build_collision_rects(),
+		definition.anchor_offset_px
 	)
 	depth_sorted_node.add_child(visual)
 	_structure_visuals[key] = visual
+	breakable_world_visual_created.emit(_break_target_key(definition.id, origin), visual)
 
 
 func _serialize_structures() -> Array[Dictionary]:
@@ -259,8 +263,19 @@ func _structure_key(structure_id: String, origin: Vector2i) -> String:
 	return "%s:%s:%s" % [structure_id, origin.x, origin.y]
 
 
+func _break_target_key(structure_id: String, origin: Vector2i) -> String:
+	return "structure:%s:%s:%s" % [structure_id, origin.x, origin.y]
+
+
 func _cell_key(coord: Vector2i) -> String:
 	return "%s:%s" % [coord.x, coord.y]
+
+
+func get_structure_visual(structure_id: String, origin: Vector2i) -> TallStructureVisual:
+	var visual := _structure_visuals.get(_structure_key(structure_id, origin)) as TallStructureVisual
+	if visual == null or not is_instance_valid(visual):
+		return null
+	return visual
 
 
 func _do_break_structure(coord: Vector2i) -> Dictionary:

@@ -3,6 +3,10 @@ extends Node
 ## Periodically checks player positions and loads/unloads chunks as needed.
 ## Host generates chunks from noise; clients request them via RPC.
 
+signal world_prop_visual_created(coord: Vector2i, visual: WorldProp)
+signal breakable_world_visual_created(target_key: String, visual: Node)
+signal breakable_world_visual_detached(target_key: String, visual: Node)
+
 const WORLD_PROP_CATALOG := preload("res://scripts/world/world_prop_catalog.gd")
 const TALL_STRUCTURE_VISUAL_SCENE := preload("res://scenes/world/tall_structure_visual.tscn")
 const WORLD_PROP_SCENE := preload("res://scenes/world/world_prop.tscn")
@@ -306,7 +310,7 @@ func break_tile(coord: Vector2i) -> void:
 func break_prop(coord: Vector2i) -> void:
 	if multiplayer.is_server():
 		var prop_id: int = get_prop_at(coord)
-		_do_break_prop(coord)
+		_do_break_prop(coord, prop_id)
 		_sync_break_prop.rpc(coord.x, coord.y, prop_id)
 		GameEvents.prop_broken.emit(coord, prop_id)
 	else:
@@ -327,7 +331,8 @@ func _do_break_tile(coord: Vector2i) -> void:
 	_apply_cell(coord, TileProperties.EMPTY)
 
 
-func _do_break_prop(coord: Vector2i) -> void:
+func _do_break_prop(coord: Vector2i, _prop_id: int = WORLD_PROP_CATALOG.EMPTY) -> void:
+	var detached_visual := _detach_world_prop_visual(coord)
 	var chunk_x: int = floori(float(coord.x) / GameConstants.CHUNK_SIZE)
 	var chunk_y: int = floori(float(coord.y) / GameConstants.CHUNK_SIZE)
 	var chunk_coord := Vector2i(chunk_x, chunk_y)
@@ -338,6 +343,8 @@ func _do_break_prop(coord: Vector2i) -> void:
 		chunk.set_prop_modification(local_x, local_y, WORLD_PROP_CATALOG.EMPTY)
 
 	_apply_prop_cell(coord, WORLD_PROP_CATALOG.EMPTY)
+	if detached_visual != null:
+		breakable_world_visual_detached.emit(_prop_target_key(coord), detached_visual)
 
 
 ## Client asks host to break a tile.
@@ -364,7 +371,7 @@ func _request_break_prop(tx: int, ty: int) -> void:
 	if prop_id == WORLD_PROP_CATALOG.EMPTY:
 		return
 
-	_do_break_prop(coord)
+	_do_break_prop(coord, prop_id)
 	_sync_break_prop.rpc(tx, ty, prop_id)
 	GameEvents.prop_broken.emit(coord, prop_id)
 
@@ -381,7 +388,7 @@ func _sync_break_tile(tx: int, ty: int) -> void:
 @rpc("authority", "reliable")
 func _sync_break_prop(tx: int, ty: int, prop_id: int) -> void:
 	var coord := Vector2i(tx, ty)
-	_do_break_prop(coord)
+	_do_break_prop(coord, prop_id)
 	GameEvents.prop_broken.emit(coord, prop_id)
 
 
@@ -537,6 +544,7 @@ func _ensure_tall_structure_visual(coord: Vector2i, props: TileProperties) -> vo
 		(coord.y + 1) * GameConstants.TILE_SIZE
 	)
 	visual.configure_parts(props.build_world_visual_parts(GameConstants.TILE_SIZE), false)
+	breakable_world_visual_created.emit(_tile_target_key(coord), visual)
 
 
 func _erase_tall_structure_visual(coord: Vector2i) -> void:
@@ -559,6 +567,9 @@ func _ensure_world_prop_visual(coord: Vector2i, definition) -> void:
 	visual.position = definition.get_world_position(coord)
 	if visual.has_method("configure"):
 		visual.configure(definition, coord)
+	if visual is WorldProp:
+		world_prop_visual_created.emit(coord, visual as WorldProp)
+	breakable_world_visual_created.emit(_prop_target_key(coord), visual)
 
 
 func _erase_world_prop_visual(coord: Vector2i) -> void:
@@ -568,6 +579,16 @@ func _erase_world_prop_visual(coord: Vector2i) -> void:
 		return
 	_world_prop_visuals.erase(key)
 	visual.queue_free()
+
+
+func _detach_world_prop_visual(coord: Vector2i) -> WorldProp:
+	var key := _cell_key(coord)
+	var visual := _world_prop_visuals.get(key) as WorldProp
+	if visual == null or not is_instance_valid(visual):
+		_world_prop_visuals.erase(key)
+		return null
+	_world_prop_visuals.erase(key)
+	return visual
 
 
 ## Places or erases a single cell on the ground or liquid layer.
@@ -602,6 +623,30 @@ func _cell_key(coord: Vector2i) -> String:
 	return "%s:%s" % [coord.x, coord.y]
 
 
+func _tile_target_key(coord: Vector2i) -> String:
+	return "tile:%s:%s" % [coord.x, coord.y]
+
+
+func _prop_target_key(coord: Vector2i) -> String:
+	return "prop:%s:%s" % [coord.x, coord.y]
+
+
+func get_breakable_tile_visual(coord: Vector2i) -> TallStructureVisual:
+	var key := _cell_key(coord)
+	var visual := _tall_structure_visuals.get(key) as TallStructureVisual
+	if visual == null or not is_instance_valid(visual):
+		return null
+	return visual
+
+
+func get_world_prop_visual(coord: Vector2i) -> WorldProp:
+	var key := _cell_key(coord)
+	var visual := _world_prop_visuals.get(key) as WorldProp
+	if visual == null or not is_instance_valid(visual):
+		return null
+	return visual
+
+
 ## Returns the top tile ID at a world-space tile coordinate from chunk data.
 func get_top_tile_at(coord: Vector2i) -> int:
 	var chunk_x: int = floori(float(coord.x) / GameConstants.CHUNK_SIZE)
@@ -613,6 +658,61 @@ func get_top_tile_at(coord: Vector2i) -> int:
 	var local_x: int = coord.x - chunk_x * GameConstants.CHUNK_SIZE
 	var local_y: int = coord.y - chunk_y * GameConstants.CHUNK_SIZE
 	return chunk.get_top_tile(local_x, local_y)
+
+
+func resolve_prop_at(coord: Vector2i) -> Dictionary:
+	var prop_id := get_prop_at(coord)
+	if prop_id != WORLD_PROP_CATALOG.EMPTY:
+		return {"prop_id": prop_id, "foot_cell": coord}
+
+	var hit_bounds := WORLD_PROP_CATALOG.get_hit_offset_bounds()
+	var best_match: Dictionary = {}
+	for foot_y in range(
+		coord.y - int(hit_bounds.get("max_y", 0)),
+		coord.y - int(hit_bounds.get("min_y", 0)) + 1
+	):
+		for foot_x in range(
+			coord.x - int(hit_bounds.get("max_x", 0)),
+			coord.x - int(hit_bounds.get("min_x", 0)) + 1
+		):
+			var candidate := Vector2i(foot_x, foot_y)
+			prop_id = get_prop_at(candidate)
+			if prop_id == WORLD_PROP_CATALOG.EMPTY:
+				continue
+			var definition = WORLD_PROP_CATALOG.get_definition(prop_id)
+			if definition == null or not definition.covers_hit_cell(candidate, coord):
+				continue
+			var candidate_match := {
+				"prop_id": prop_id,
+				"foot_cell": candidate,
+			}
+			if _is_better_prop_hit_match(coord, candidate_match, best_match):
+				best_match = candidate_match
+
+	if not best_match.is_empty():
+		return best_match
+	return {}
+
+
+func _is_better_prop_hit_match(coord: Vector2i, candidate: Dictionary, current_best: Dictionary) -> bool:
+	if current_best.is_empty():
+		return true
+
+	var candidate_cell := candidate.get("foot_cell", Vector2i.ZERO) as Vector2i
+	var best_cell := current_best.get("foot_cell", Vector2i.ZERO) as Vector2i
+	var candidate_offset := coord - candidate_cell
+	var best_offset := coord - best_cell
+	var candidate_distance := absi(candidate_offset.x) + absi(candidate_offset.y)
+	var best_distance := absi(best_offset.x) + absi(best_offset.y)
+	if candidate_distance != best_distance:
+		return candidate_distance < best_distance
+	if absi(candidate_offset.y) != absi(best_offset.y):
+		return absi(candidate_offset.y) < absi(best_offset.y)
+	if absi(candidate_offset.x) != absi(best_offset.x):
+		return absi(candidate_offset.x) < absi(best_offset.x)
+	if candidate_cell.y != best_cell.y:
+		return candidate_cell.y < best_cell.y
+	return candidate_cell.x < best_cell.x
 
 
 func get_prop_at(coord: Vector2i) -> int:

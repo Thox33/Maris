@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://csdcs1r36n302"
-path="res://.godot/imported/tool_items.png-171500b3d5031b63280eb9458ac22786.ctex"
+uid="uid://dv8fsblrpumv1"
+path="res://.godot/imported/tree_props.png-cc4b5f71b9faa718fdd6706c3ff682e1.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/tilesets/tool_items.png"
-dest_files=["res://.godot/imported/tool_items.png-171500b3d5031b63280eb9458ac22786.ctex"]
+source_file="res://assets/tilesets/tree_props.png"
+dest_files=["res://.godot/imported/tree_props.png-cc4b5f71b9faa718fdd6706c3ff682e1.ctex"]
 
 [params]
 

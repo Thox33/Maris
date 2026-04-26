@@ -17,9 +17,9 @@ The chosen near-term baseline is:
 - movement remains trusted co-op and owning-peer-authoritative
 - inventory, world mutation, structures, placement, and persistence remain host-authoritative
 - block and structure breaking moves to host-authoritative damage, cooldown, and completion
-- clients may still show immediate local breaking feedback for responsiveness
+- clients render replicated crack feedback from the host-owned damaged-target state
 
-This means the host owns the canonical damaged-target state even when the local player starts mining instantly on the client.
+This means the client only starts or refreshes primary-use intent while the host owns canonical damaged-target progression, hit timing, and completion.
 
 ## Context
 
@@ -45,7 +45,7 @@ Host-authoritative breaking is preferred because:
 - the host can validate range, target identity, equipped item, hit cadence, and completion in one place
 - future modifiers such as tools, buffs, debuffs, and actor-specific mining speed become easier to implement consistently
 - mining can share a unified item-use cooldown model with later combat or tool interactions
-- clients can still render local crack feedback immediately, so responsiveness does not require client-owned break completion
+- clients can render shared crack feedback from host-emitted stage updates, so responsiveness does not require client-owned break completion
 
 Movement is intentionally not changed in the same step because:
 
@@ -82,7 +82,7 @@ Expected implementation shape for breaking:
 - multiple players may damage the same target together
 - damaged targets remain visible and resumable for a short timeout before clearing
 - host emits crack-stage updates and final mutation once durability is exhausted
-- clients keep local visual feedback but must not own hit timing or break completion
+- clients render replicated crack feedback but must not own hit timing or break completion
 
 ## Follow-Up
 

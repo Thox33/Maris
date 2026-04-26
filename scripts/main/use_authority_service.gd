@@ -191,6 +191,7 @@ func _build_damaged_target(target: Dictionary) -> Dictionary:
 	return {
 		"kind": String(target.get("kind", "")),
 		"coord": target.get("coord", Vector2i.ZERO),
+		"hit_coord": target.get("hit_coord", target.get("coord", Vector2i.ZERO)),
 		"structure_id": String(target.get("structure_id", "")),
 		"origin": target.get("origin", Vector2i.ZERO),
 		"durability": float(target.get("durability", 1.0)),
@@ -202,15 +203,16 @@ func _build_damaged_target(target: Dictionary) -> Dictionary:
 
 func _resolve_break_target(coord: Vector2i) -> Dictionary:
 	if chunk_manager != null:
-		var prop_id := int(chunk_manager.get_prop_at(coord))
-		if prop_id != WORLD_PROP_CATALOG.EMPTY:
-			var prop_definition = WORLD_PROP_CATALOG.get_definition(prop_id)
-			if prop_definition != null and prop_definition.breakable:
+		var direct_prop_id := int(chunk_manager.get_prop_at(coord))
+		if direct_prop_id != WORLD_PROP_CATALOG.EMPTY:
+			var direct_prop_definition = WORLD_PROP_CATALOG.get_definition(direct_prop_id)
+			if direct_prop_definition != null and direct_prop_definition.breakable:
 				return {
 					"key": _prop_target_key(coord),
 					"kind": TARGET_KIND_PROP,
 					"coord": coord,
-					"durability": prop_definition.break_hardness,
+					"hit_coord": coord,
+					"durability": direct_prop_definition.break_hardness,
 				}
 
 		var tile_id := int(chunk_manager.get_top_tile_at(coord))
@@ -221,6 +223,7 @@ func _resolve_break_target(coord: Vector2i) -> Dictionary:
 					"key": _tile_target_key(coord),
 					"kind": TARGET_KIND_TILE,
 					"coord": coord,
+					"hit_coord": coord,
 					"durability": tile_props.hardness,
 				}
 
@@ -233,10 +236,26 @@ func _resolve_break_target(coord: Vector2i) -> Dictionary:
 				"key": _structure_target_key(structure_id, origin),
 				"kind": TARGET_KIND_STRUCTURE,
 				"coord": coord,
+				"hit_coord": coord,
 				"structure_id": structure_id,
 				"origin": origin,
 				"durability": float(structure_data.get("hardness", 1.0)),
 			}
+
+	if chunk_manager != null:
+		var resolved: Dictionary = chunk_manager.resolve_prop_at(coord)
+		if not resolved.is_empty():
+			var prop_id: int = resolved["prop_id"]
+			var foot_cell: Vector2i = resolved["foot_cell"]
+			var prop_definition = WORLD_PROP_CATALOG.get_definition(prop_id)
+			if prop_definition != null and prop_definition.breakable:
+				return {
+					"key": _prop_target_key(foot_cell),
+					"kind": TARGET_KIND_PROP,
+					"coord": foot_cell,
+					"hit_coord": coord,
+					"durability": prop_definition.break_hardness,
+				}
 
 	return {}
 
@@ -297,7 +316,7 @@ func _is_target_in_range(peer_id: int, target: Dictionary) -> bool:
 	var player_node := players_node.get_node_or_null(str(peer_id))
 	if player_node == null:
 		return false
-	var coord := target.get("coord", Vector2i.ZERO) as Vector2i
+	var coord := target.get("hit_coord", target.get("coord", Vector2i.ZERO)) as Vector2i
 	var world_pos := Vector2(
 		coord.x * GameConstants.TILE_SIZE + GameConstants.TILE_SIZE / 2.0,
 		coord.y * GameConstants.TILE_SIZE + GameConstants.TILE_SIZE / 2.0
@@ -329,8 +348,11 @@ func _serialize_target(target_state: Dictionary) -> Dictionary:
 		or String(target_state.get("kind", "")) == TARGET_KIND_PROP
 	):
 		var coord := target_state.get("coord", Vector2i.ZERO) as Vector2i
+		var hit_coord := target_state.get("hit_coord", coord) as Vector2i
 		payload["coord_x"] = coord.x
 		payload["coord_y"] = coord.y
+		payload["hit_coord_x"] = hit_coord.x
+		payload["hit_coord_y"] = hit_coord.y
 	else:
 		var origin := target_state.get("origin", Vector2i.ZERO) as Vector2i
 		payload["structure_id"] = String(target_state.get("structure_id", ""))

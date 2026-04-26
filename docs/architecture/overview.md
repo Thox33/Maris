@@ -42,12 +42,12 @@ See [`../decisions/authority_model.md`](../decisions/authority_model.md) for the
 
 ### Current breaking behavior
 
-- clients may begin local crack feedback immediately
 - clients send primary-use keepalive intent while holding the target
 - the host validates target identity, range, and cooldown cadence
 - the host tracks shared damaged-target state so multiple players can mine the same target together
 - the host resolves mining damage from the authoritative equipped item
-- the host emits crack-stage updates and the final break mutation
+- the host emits crack-stage updates that `BreakVisualService` applies to the target's world visual on every peer
+- the host emits the final break mutation once durability is exhausted
 
 ## Scene Flow
 
@@ -70,7 +70,7 @@ main.tscn  (game session composition root)
       DecorLayer      - cheap sway decor tiles that still stay tile-based
       WorldProps      - node-based vegetation props with foot-pivot y-sorting
       Players         - populated by MultiplayerSpawner
-      BreakVisuals    - created at runtime by BreakVisualService
+      BreakEffects    - created at runtime by BreakVisualService for break particles only
     ChunkDebugCanvas
   Items               - world item entities
   PlayerSpawner       - MultiplayerSpawner for players
@@ -114,7 +114,7 @@ Current service ownership:
 - `SessionPersistenceService` - autosave orchestration, world save orchestration, disconnect save, and quit/leave save
 - `WorldDropService` - break-result to drop mapping and item entity spawn requests
 - `UseAuthorityService` - host-authoritative primary-use validation, cooldown handling, break damage, and damaged-target replication
-- `BreakVisualService` - crack-stage and break-feedback presentation
+- `BreakVisualService` - central fixed crack-frame asset loading, shared break-state application onto breakable world visuals, and prop break-completion feedback on detached visuals
 - `InventoryManager` - RPC bridge and local client sync surface for inventory state
 - `InventoryAuthorityService` - canonical host-side inventory rules and held-slot state
 - `WorldPlacementService` - host-side placement validation against world and structure occupancy
@@ -189,7 +189,7 @@ Legacy flat saves are normalized on load so old worlds remain readable.
 ## Tile System
 
 `TileProperties` (`scripts/world/tile_properties.gd`) is the single source of truth for top-layer tiles.
-`WorldPropCatalog` (`scripts/world/world_prop_catalog.gd`) is the static registry for node-based world props such as coral.
+`WorldPropCatalog` (`scripts/world/world_prop_catalog.gd`) is the static registry for node-based world props such as coral and trees.
 
 Current gameplay-facing fields:
 
@@ -225,9 +225,11 @@ WorldPropCatalog.by_name  - string name -> int ID
 WorldPropCatalog.EMPTY    - no prop at this cell
 ```
 
-Coral now lives on this prop path. The legacy coral tile IDs remain in `TileProperties`
-for compatibility with old saves and item/icon references, but runtime chunk loading
-migrates old coral top-tile modifications into sparse prop modifications.
+Coral and trees live on this prop path. Trees use a separate atlas (`tree_props.png`)
+with 16x32 sprites (1 tile wide, 2 tiles tall) anchored at the foot pivot. The legacy
+coral tile IDs remain in `TileProperties` for compatibility with old saves and item/icon
+references, but runtime chunk loading migrates old coral top-tile modifications into
+sparse prop modifications.
 
 ## Chunk System And World Rendering
 
@@ -246,9 +248,11 @@ Current layer split:
 - `TerrainLayer` is the authoritative top-tile occupancy layer used for collision and movement-speed checks
 - `BaseVisualLayer` renders the visible flat block sprites for `FLAT_BASE` tiles
 - `DecorLayer` lives inside the depth-sorted branch for cheap tile-based sway decor that still renders via `TileMapLayer`
-- `WorldProps` lives inside the depth-sorted branch and owns node-based prop instances such as coral
+- `WorldProps` lives inside the depth-sorted branch and owns node-based prop instances such as coral and trees
 - tall structure blocks use runtime `Node2D` visuals instead of a single flat tile
-- coral is generated, replicated, saved, and broken through the prop layer rather than as a decor tile
+- coral and trees are generated, replicated, saved, and broken through the prop layer
+- trees use per-prop atlas textures with tall sprite regions (16x32) and trunk-only collision
+- break crack-state is rendered on the actual world visual node for breakable tiles, props, and structures, so occlusion and y-sorting follow the same render object
 
 Persistence behavior:
 
@@ -264,7 +268,6 @@ Current pragmatic runtime note:
 
 ```text
 Client holds LMB within range
-  -> local crack feedback can start immediately
   -> client sends / refreshes primary-use target intent to host
 
 Host use authority
@@ -274,6 +277,7 @@ Host use authority
   -> keeps damaged targets alive for a short timeout
   -> aggregates hits from multiple players on the same target
   -> replicates crack stage to all peers
+  -> BreakVisualService applies the shared crack texture to the target's actual visual node
   -> on durability exhaustion: mutates world or structure state and broadcasts the result
 ```
 
@@ -294,7 +298,7 @@ Current item-use scaffold:
 
 - **Vegetation sway shader** (`assets/shaders/vegetation_sway.gdshader`) - shared sway on tile decor and prop sprites
 - **Liquid shader** (`assets/shaders/liquid.gdshader`) - shimmer animation on `LiquidLayer`
-- **BreakVisualService** - generated crack-stage sprites and break particles
+- **BreakVisualService** - fixed crack-frame texture atlas loading, shared break-stage application on world visuals, prop break-completion feedback, and break particles
 
 ### Current CanvasLayer usage
 
@@ -307,4 +311,4 @@ These numbers describe the current implementation, not a strict future-proof con
 
 ## Movement Model
 
-There is no gravity. Players move freely in all directions via `move_and_slide()` with a velocity vector controlled by input on both axes. Movement speed is modulated by the non-solid world content the player overlaps: empty cells use `1.0x`, props such as coral use the prop definition's `move_speed_factor`, and non-solid top tiles still use their tile `move_speed_factor`.
+There is no gravity. Players move freely in all directions via `move_and_slide()` with a velocity vector controlled by input on both axes. Movement speed is modulated by the non-solid world content the player overlaps: empty cells use `1.0x`, props such as coral and trees use the prop definition's `move_speed_factor`, and non-solid top tiles still use their tile `move_speed_factor`.

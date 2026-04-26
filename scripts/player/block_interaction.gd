@@ -1,7 +1,7 @@
 extends Node2D
 const WORLD_PROP_CATALOG := preload("res://scripts/world/world_prop_catalog.gd")
 ## Handles block breaking and placing interaction for the player.
-## Breaking: tracks progress, shows crack overlay, delegates to ChunkManager.
+## Breaking: tracks progress, sends authoritative use intent, and lets BreakVisualService update the target visual.
 ## Placing: sends intent (slot + coord) to InventoryManager for host validation.
 
 const WORLD_INPUT_BLOCKER_GROUP := &"world_input_blocking_ui"
@@ -75,7 +75,8 @@ func _handle_breaking(delta: float) -> void:
 		_stop_breaking()
 		return
 
-	var coord := _terrain_layer.local_to_map(mouse_world)
+	var raw_coord := _terrain_layer.local_to_map(mouse_world)
+	var coord := _resolve_break_coord(raw_coord)
 	if not _has_breakable_target(coord):
 		_stop_breaking()
 		return
@@ -87,7 +88,7 @@ func _handle_breaking(delta: float) -> void:
 		_break_keepalive_timer = 0.0
 
 	if target_changed or _break_keepalive_timer <= 0.0:
-		_use_authority_service.request_primary_use(coord, selected_hotbar_slot)
+		_use_authority_service.request_primary_use(raw_coord, selected_hotbar_slot)
 		_break_keepalive_timer = GameConstants.PRIMARY_USE_KEEPALIVE_INTERVAL
 
 
@@ -164,6 +165,23 @@ func _is_mouse_over_world_blocking_ui() -> bool:
 			return true
 		hovered = hovered.get_parent()
 	return false
+
+
+func _resolve_break_coord(coord: Vector2i) -> Vector2i:
+	if _chunk_manager == null:
+		return coord
+	if _chunk_manager.get_prop_at(coord) != WORLD_PROP_CATALOG.EMPTY:
+		return coord
+	if _chunk_manager.get_top_tile_at(coord) != TileProperties.EMPTY:
+		return coord
+	if _structure_manager != null:
+		var structure_data := _structure_manager.get_breakable_structure_data(coord) as Dictionary
+		if not structure_data.is_empty():
+			return coord
+	var resolved: Dictionary = _chunk_manager.resolve_prop_at(coord)
+	if not resolved.is_empty():
+		return resolved["foot_cell"] as Vector2i
+	return coord
 
 
 func _has_breakable_target(coord: Vector2i) -> bool:

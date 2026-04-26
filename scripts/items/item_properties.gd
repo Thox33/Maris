@@ -8,7 +8,9 @@ const ITEM_HOLD_STYLE_CATALOG := preload("res://scripts/items/item_hold_style_ca
 
 ## Sentinel for empty slots / no item.
 const NONE: int = -1
-const DEFAULT_ICON_ATLAS_PATH := "res://assets/tilesets/terrain_tiles.png"
+const BLOCK_ICON_ATLAS_PATH := "res://assets/tilesets/block_icons.png"
+const TOOL_ICON_ATLAS_PATH := "res://assets/tilesets/tool_icons.png"
+const DEFAULT_ICON_ATLAS_PATH := BLOCK_ICON_ATLAS_PATH
 const INVALID_ICON_COORD := Vector2i(-1, -1)
 
 enum PlacementKind {
@@ -26,19 +28,18 @@ enum ToolKind {
 ## Master registry: stable integer ID -> ItemProperties.
 ## To add an item: append a new entry with the next unused ID.
 static var registry: Dictionary = {
-	0: ItemProperties.new(0, "sand", 64, PlacementKind.TILE, 0, -1, "", 0),
-	1: ItemProperties.new(1, "stone", 64, PlacementKind.TILE, 1, -1, "", 1),
-	2: ItemProperties.new(2, "coral", 64, PlacementKind.PROP, -1, 0, "", 2),
-	3: ItemProperties.new(
-		3,
-		"large_furnace",
-		16,
-		PlacementKind.STRUCTURE,
-		-1,
-		-1,
-		"large_furnace",
-		1
-	),
+	0: ItemProperties.new(0, "sand", 64, PlacementKind.TILE, 0, -1, "", -1,
+		GameConstants.BREAK_BASE_DAMAGE, GameConstants.PRIMARY_USE_COOLDOWN,
+		ToolKind.NONE, "", Vector2i(0, 0)),
+	1: ItemProperties.new(1, "stone", 64, PlacementKind.TILE, 1, -1, "", -1,
+		GameConstants.BREAK_BASE_DAMAGE, GameConstants.PRIMARY_USE_COOLDOWN,
+		ToolKind.NONE, "", Vector2i(1, 0)),
+	2: ItemProperties.new(2, "coral", 64, PlacementKind.PROP, -1, 0, "", -1,
+		GameConstants.BREAK_BASE_DAMAGE, GameConstants.PRIMARY_USE_COOLDOWN,
+		ToolKind.NONE, "", Vector2i(2, 0)),
+	3: ItemProperties.new(3, "large_furnace", 16, PlacementKind.STRUCTURE, -1, -1, "large_furnace", -1,
+		GameConstants.BREAK_BASE_DAMAGE, GameConstants.PRIMARY_USE_COOLDOWN,
+		ToolKind.NONE, "", Vector2i(4, 0)),
 	4: ItemProperties.new(
 		4,
 		"stone_pickaxe",
@@ -47,14 +48,17 @@ static var registry: Dictionary = {
 		-1,
 		-1,
 		"",
-		1,
+		-1,
 		0.75,
 		0.18,
 		ToolKind.PICKAXE,
-		"res://assets/tilesets/tool_items.png",
+		TOOL_ICON_ATLAS_PATH,
 		Vector2i(0, 0),
 		ITEM_HOLD_STYLE_CATALOG.STYLE_TOOL_UP_RIGHT
 	),
+	5: ItemProperties.new(5, "wood", 64, PlacementKind.NONE, -1, 6, "", -1,
+		GameConstants.BREAK_BASE_DAMAGE, GameConstants.PRIMARY_USE_COOLDOWN,
+		ToolKind.NONE, "", Vector2i(3, 0)),
 }
 
 ## Reverse lookup: string name -> integer ID. Keep in sync with registry.
@@ -64,6 +68,7 @@ static var by_name: Dictionary = {
 	"coral": 2,
 	"large_furnace": 3,
 	"stone_pickaxe": 4,
+	"wood": 5,
 }
 
 ## Stable integer ID (never reuse a removed ID).

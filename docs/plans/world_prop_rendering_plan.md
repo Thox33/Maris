@@ -212,12 +212,20 @@ Goal:
 
 - avoid growing multiple overlapping node systems unnecessarily
 
-### Phase 5: Add Trees on the Same Pipeline
+### Phase 5: Add Trees on the Same Pipeline (Done)
 
 - implement trees directly as world props
 - use small trunk collision near the base
 - use large upward visual offset for canopy
 - tune sway so trunks stay relatively stable and crowns move more
+
+Implemented:
+
+- three tree variants (IDs 6-8) in `WorldPropCatalog` using 16x32 sprites from `tree_props.png`
+- trunk-only collision (6x6 rect near the base)
+- sway with 14px rigid base so the trunk stays stable and the canopy moves
+- spawned on grass ground in the shallow overworld via noise threshold
+- wood item (ID 5) drops when trees are broken
 
 Goal:
 

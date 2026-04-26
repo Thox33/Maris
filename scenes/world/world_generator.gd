@@ -159,6 +159,7 @@ func generate_chunk(coord: Vector2i) -> ChunkData:
 	var origin_x: int = coord.x * GameConstants.CHUNK_SIZE
 	var origin_y: int = coord.y * GameConstants.CHUNK_SIZE
 
+	# Pass 1: ground + top tiles
 	for local_y in range(GameConstants.CHUNK_SIZE):
 		for local_x in range(GameConstants.CHUNK_SIZE):
 			var world_x: int = origin_x + local_x
@@ -167,9 +168,59 @@ func generate_chunk(coord: Vector2i) -> ChunkData:
 			var ground_id := _get_ground_tile_for_position(world_x, world_y)
 			chunk.ground_base_tiles[idx] = ground_id
 			chunk.top_base_tiles[idx] = _get_top_tile_for_position(world_x, world_y, ground_id)
+
+	# Pass 2: props with multi-cell reservation
+	var reserved_cells: Dictionary = {}
+	for local_y in range(GameConstants.CHUNK_SIZE):
+		for local_x in range(GameConstants.CHUNK_SIZE):
+			var idx: int = local_y * GameConstants.CHUNK_SIZE + local_x
+			if reserved_cells.has(idx):
+				continue
+			var world_x: int = origin_x + local_x
+			var world_y: int = origin_y + local_y
+			var ground_id: int = chunk.ground_base_tiles[idx]
 			var prop_id := _get_prop_for_position(world_x, world_y, ground_id)
-			if prop_id != WORLD_PROP_CATALOG.EMPTY:
-				chunk.prop_base_cells[idx] = prop_id
+			if prop_id == WORLD_PROP_CATALOG.EMPTY:
+				continue
+			var definition = WORLD_PROP_CATALOG.get_definition(prop_id)
+			if definition == null:
+				continue
+			# Check all cells this prop covers
+			var offsets := definition.get_hit_cell_offsets()
+			var can_place := true
+			for offset in offsets:
+				var nx: int = local_x + offset.x
+				var ny: int = local_y + offset.y
+				if nx < 0 or nx >= GameConstants.CHUNK_SIZE or ny < 0 or ny >= GameConstants.CHUNK_SIZE:
+					can_place = false
+					break
+				var n_idx: int = ny * GameConstants.CHUNK_SIZE + nx
+				if reserved_cells.has(n_idx):
+					can_place = false
+					break
+				if chunk.top_base_tiles[n_idx] != TileProperties.EMPTY:
+					can_place = false
+					break
+				var n_ground: int = chunk.ground_base_tiles[n_idx]
+				var n_ground_props := GroundTileProperties.get_properties(n_ground)
+				if n_ground_props == null or not n_ground_props.is_solid:
+					can_place = false
+					break
+				if not definition.is_ground_allowed(n_ground_props.name):
+					can_place = false
+					break
+			if not can_place:
+				continue
+			chunk.prop_base_cells[idx] = prop_id
+			# Reserve all covered cells
+			for offset in offsets:
+				var rx: int = local_x + offset.x
+				var ry: int = local_y + offset.y
+				var r_idx: int = ry * GameConstants.CHUNK_SIZE + rx
+				reserved_cells[r_idx] = true
+				# Clear top tiles under this prop
+				if chunk.top_base_tiles[r_idx] != TileProperties.EMPTY:
+					chunk.top_base_tiles[r_idx] = TileProperties.EMPTY
 
 	return chunk
 
@@ -288,8 +339,19 @@ func _get_prop_for_position(x: int, y: int, ground_id: int) -> int:
 
 	if density > 0.3:
 		return WORLD_PROP_CATALOG.EMPTY
+
+	# Coral: mid-density underwater-style areas
 	if density > 0.2 and n > 0.1:
 		var variants := WORLD_PROP_CATALOG.coral_variants
 		var variant_index: int = absi(x * 73 + y * 137) % variants.size()
 		return variants[variant_index]
+
+	# Trees: sparse placement on grass ground (shallow overworld)
+	if ground_props.name.begins_with("grass") and depth_ratio < 0.15:
+		var tree_noise: float = noise.get_noise_2d(float(x) * 2.3 + 500.0, float(y) * 2.3 + 500.0)
+		if tree_noise > 0.25:
+			var variants := WORLD_PROP_CATALOG.tree_variants
+			var variant_index: int = absi(x * 59 + y * 113) % variants.size()
+			return variants[variant_index]
+
 	return WORLD_PROP_CATALOG.EMPTY

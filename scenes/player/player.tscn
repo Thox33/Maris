@@ -1,7 +1,6 @@
 [gd_scene format=3 uid="uid://8gtvra6d8dbq"]
 
 [ext_resource type="Script" uid="uid://da3l8pxsswwqk" path="res://scenes/player/player.gd" id="1"]
-[ext_resource type="Texture2D" uid="uid://bymlhfl7k0kne" path="res://assets/sprites/player.png" id="2"]
 [ext_resource type="Script" uid="uid://cbrl12dud5hcy" path="res://scripts/player/block_interaction.gd" id="3"]
 [ext_resource type="PackedScene" path="res://scenes/ui/hotbar_ui.tscn" id="5"]
 [ext_resource type="PackedScene" path="res://scenes/ui/debug_overlay.tscn" id="6"]

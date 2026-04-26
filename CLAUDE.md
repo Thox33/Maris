@@ -49,8 +49,24 @@ Main (Node2D)                         scenes/main/main.gd
 - Ground and top tiles are split across `GroundTileProperties` and `TileProperties`.
 - `GroundTileProperties` defines floor states such as dirt, sand, stone, grass, water, and lava.
 - `TileProperties` defines top-layer obstacles and decor such as sand blocks, stone blocks, and coral variants.
+- `WorldPropCatalog` defines node-based vegetation props such as coral and trees.
+- Props support per-definition sprite sizes (e.g. 16x32 or 32x32 for trees), custom atlas textures, and partial collision.
+- Props declare `allowed_ground_names` for data-driven ground validation during world generation.
+- Multi-cell props are automatically reserved during chunk generation to prevent overlaps.
 - Non-solid top decor uses `move_speed_factor` for slowdown.
 - Integer IDs are permanent and must never be reused.
+
+### Atlas Architecture
+- **World atlases** hold sprites rendered in the game world:
+  - `ground_tiles.png` — ground layer tiles (dirt, sand, grass, etc.)
+  - `liquid_tiles.png` — liquid layer tiles (water, lava)
+  - `terrain_tiles.png` — top-layer tiles and coral decor (TileMapLayer + WorldProp)
+  - `tree_props.png` — tree world props only
+  - `structure_tiles.png` — structure visuals (furnace, etc.)
+- **Item icon atlases** are split by category:
+  - `block_icons.png` — block and material icons (sand, stone, coral, wood, furnace)
+  - `tool_icons.png` — tool and weapon icons (pickaxe, etc.)
+- New world sprites go into the appropriate world atlas; new item icons go into the matching category atlas.
 
 ### Inventory System
 - `Inventory` is a generic container class (RefCounted, no Node).
@@ -81,7 +97,7 @@ Main (Node2D)                         scenes/main/main.gd
 ### Visual Effects
 - `vegetation_sway.gdshader` animates decor on `DecorLayer`.
 - `liquid.gdshader` animates water and lava on `LiquidLayer`.
-- `BreakVisualService` renders crack overlays and break particles.
+- `BreakVisualService` applies host-replicated fixed crack-frame stages to breakable world visuals and drives break-completion feedback and particles.
 
 ## Autoloads
 - `GameConstants` - world, movement, networking, inventory, and persistence tuning.
