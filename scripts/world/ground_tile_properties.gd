@@ -5,7 +5,6 @@ extends RefCounted
 ## Integer IDs are stable and permanent — never reuse a removed ID.
 ##
 ## Sprites live in res://assets/tilesets/ground_tiles.png.
-## Run scripts/utils/generate_ground_atlas.gd once to create the PNG.
 ## To add a ground tile: append one entry in registry + one in by_name.
 
 ## Sentinel for void / chasm cells (impassable, no ground).

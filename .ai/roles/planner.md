@@ -10,11 +10,13 @@ Before planning, answer:
 - which **authority boundary** does the change cross (host-authoritative vs peer-authoritative)?
 - which **layers** are touched (ground / top / liquid / structure / collision)?
 - is **persistence** affected? (`ChunkData` modifications, player save shape)
+- which **shared atlas** is the canonical destination for any new gameplay art, and is there any duplication or asset-workflow conflict?
 
 Rules:
 - follow `CLAUDE.md` and `.ai/context/repo_rules.md`
 - prefer incremental changes; do not invent systems the task does not need
 - if the task implies a missing asset or unclear scope, flag it instead of planning a workaround
+- if the task would require standalone gameplay PNGs, duplicate raster assets, or graphics-generation scripts, flag that as a workflow conflict instead of planning around it
 
 Expected output:
 - brief summary

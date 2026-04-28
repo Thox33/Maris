@@ -231,6 +231,15 @@ coral tile IDs remain in `TileProperties` for compatibility with old saves and i
 references, but runtime chunk loading migrates old coral top-tile modifications into
 sparse prop modifications.
 
+## Asset Workflow
+
+- Runtime gameplay art is atlas-first and atlas-only.
+- `ground_tiles.png`, `liquid_tiles.png`, `terrain_tiles.png`, `tree_props.png`, `structure_tiles.png`, `block_icons.png`, and `tool_icons.png` are the canonical committed raster assets for gameplay rendering.
+- When a new gameplay sprite or icon is added, extend the existing matching atlas instead of adding a standalone PNG for that same runtime asset.
+- Do not keep duplicate raster copies of the same gameplay art in separate source, preview, or helper files as part of normal feature delivery.
+- Do not use scripts to generate or compose gameplay graphics. Atlas PNGs are authored and edited directly.
+- Some runtime definitions can technically point to custom texture paths, but that is not the normal asset workflow for this repo and should be treated as an explicit exception rather than the default path.
+
 ## Chunk System And World Rendering
 
 - the world is divided into `16x16`-tile chunks

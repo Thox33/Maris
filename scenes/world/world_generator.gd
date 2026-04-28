@@ -69,7 +69,7 @@ func _setup_ground_layer() -> void:
 		return
 	var texture := load("res://assets/tilesets/ground_tiles.png") as Texture2D
 	if texture == null:
-		push_warning("[WorldGenerator] ground_tiles.png not found — run generate_ground_atlas.gd first.")
+		push_warning("[WorldGenerator] ground_tiles.png not found at res://assets/tilesets/ground_tiles.png.")
 		return
 	var source := TileSetAtlasSource.new()
 	source.texture = texture
@@ -118,7 +118,7 @@ func _setup_liquid_layer() -> void:
 		return
 	var texture := load("res://assets/tilesets/liquid_tiles.png") as Texture2D
 	if texture == null:
-		push_warning("[WorldGenerator] liquid_tiles.png not found — run generate_liquid_atlas.gd first.")
+		push_warning("[WorldGenerator] liquid_tiles.png not found at res://assets/tilesets/liquid_tiles.png.")
 		return
 	var source := TileSetAtlasSource.new()
 	source.texture = texture

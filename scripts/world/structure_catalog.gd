@@ -14,6 +14,7 @@ static func get_definition(structure_id: String) -> StructureDefinition:
 static func _build_registry() -> Dictionary:
 	return {
 		"large_furnace": _build_large_furnace_definition(),
+		"botanical_table": _build_botanical_table_definition(),
 	}
 
 
@@ -70,6 +71,62 @@ static func _build_large_furnace_definition() -> StructureDefinition:
 		Vector2i(0, 2),
 		STRUCTURE_ATLAS_PATH,
 		3.0
+	)
+
+
+static func _build_botanical_table_definition() -> StructureDefinition:
+	var footprint := Vector2i(3, 2)
+	var anchor := _build_south_center_anchor(footprint)
+	var occupied_cells := _build_rect_cells(footprint.x, footprint.y)
+	var collision_cells: Array[Vector2i] = [
+		Vector2i(0, 1),
+		Vector2i(1, 1),
+		Vector2i(2, 1),
+	]
+	var parts: Array[Dictionary] = [
+		{
+			"atlas_coord": Vector2i(0, 3),
+			"offset": _cell_top_left_offset(anchor, Vector2i(0, 0)),
+			"z_index": 1,
+		},
+		{
+			"atlas_coord": Vector2i(1, 3),
+			"offset": _cell_top_left_offset(anchor, Vector2i(1, 0)),
+			"z_index": 1,
+		},
+		{
+			"atlas_coord": Vector2i(2, 3),
+			"offset": _cell_top_left_offset(anchor, Vector2i(2, 0)),
+			"z_index": 1,
+		},
+		{
+			"atlas_coord": Vector2i(0, 4),
+			"offset": _cell_top_left_offset(anchor, Vector2i(0, 1)),
+			"z_index": 0,
+		},
+		{
+			"atlas_coord": Vector2i(1, 4),
+			"offset": _cell_top_left_offset(anchor, Vector2i(1, 1)),
+			"z_index": 0,
+		},
+		{
+			"atlas_coord": Vector2i(2, 4),
+			"offset": _cell_top_left_offset(anchor, Vector2i(2, 1)),
+			"z_index": 0,
+		},
+	]
+
+	return StructureDefinition.new(
+		"botanical_table",
+		footprint,
+		occupied_cells,
+		collision_cells,
+		occupied_cells,
+		parts,
+		anchor,
+		Vector2i(1, 1),
+		STRUCTURE_ATLAS_PATH,
+		2.0
 	)
 
 

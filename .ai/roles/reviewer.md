@@ -19,6 +19,9 @@ Checklist (apply every time):
 - **Persistence:** keyed by `account_id`, not `peer_id`? Only modifications serialized, not regenerable base terrain? Atomic write pattern preserved?
 - **Data classes:** `RefCounted` types (`Inventory`, `ChunkData`, `TileProperties`, ...) not misused as nodes?
 - **Assets & scope:** no vector-graphic placeholders for tiles/characters, no `TODO: proper asset later`, no stub implementations with "wird spaeter ersetzt"?
+- **Atlas workflow:** are gameplay sprites/icons added to the correct shared atlas instead of introducing standalone duplicate PNGs? Are atlas files treated as the canonical gameplay art rather than generated outputs?
+- **Duplication:** did the change introduce unnecessary duplication in images, helper logic, or copied code paths that should instead extend an existing asset or abstraction?
+- **Graphics generation:** did the change add or rely on scripts that generate, composite, or bake gameplay graphics? That is a finding unless the task explicitly changes the asset pipeline itself.
 - **Scene wiring:** `.tscn` / `.tres` changes consistent; no dangling `setup()` dependencies?
 - **Docs parity:** if behavior, architecture, workflow, commands, or developer setup changed, were `README.md`, `docs/`, and `.ai/README.md` updated where needed? Missing or stale docs are findings, not optional notes.
 

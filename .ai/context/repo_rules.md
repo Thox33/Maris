@@ -37,6 +37,12 @@ These extend `CLAUDE.md` with the concrete patterns that are easy to violate.
 
 ### Scene / asset workflow
 - Prefer `.tres` for editor-owned data, `.gd` for logic.
+- Gameplay raster assets are atlas-only: world visuals and item icons belong in the shared atlas files under `assets/tilesets/`.
+- Atlas PNGs are the canonical source for gameplay art in this repo.
+- Do **not** add standalone structure/icon/preview/source PNGs for the same gameplay art as part of normal feature work.
+- Do **not** keep unnecessary duplicate copies of the same image or code. Extend existing assets/helpers unless there is a concrete reason not to.
+- Do **not** use scripts to generate, compose, or bake gameplay graphics or atlas content.
+- If a task appears to require a standalone gameplay PNG, duplicate raster asset, or graphics-generation script, stop and flag the workflow conflict instead of improvising a new asset path.
 
 ## Assets & scope
 

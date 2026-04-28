@@ -66,7 +66,11 @@ Main (Node2D)                         scenes/main/main.gd
 - **Item icon atlases** are split by category:
   - `block_icons.png` — block and material icons (sand, stone, coral, wood, furnace)
   - `tool_icons.png` — tool and weapon icons (pickaxe, etc.)
+- Atlas PNGs are the canonical committed gameplay art for this repo.
 - New world sprites go into the appropriate world atlas; new item icons go into the matching category atlas.
+- Do not add standalone structure or item-icon PNGs as normal feature assets when an atlas category already exists for that asset class.
+- Do not keep duplicate raster copies of the same gameplay art in multiple files unless the task is explicitly about changing the asset pipeline.
+- Do not use scripts to generate, composite, or "help assemble" gameplay graphics. Atlases are authored assets, not generated build outputs.
 
 ### Inventory System
 - `Inventory` is a generic container class (RefCounted, no Node).

@@ -59,6 +59,9 @@ static var registry: Dictionary = {
 	5: ItemProperties.new(5, "wood", 64, PlacementKind.NONE, -1, 6, "", -1,
 		GameConstants.BREAK_BASE_DAMAGE, GameConstants.PRIMARY_USE_COOLDOWN,
 		ToolKind.NONE, "", Vector2i(3, 0)),
+	6: ItemProperties.new(6, "botanical_table", 16, PlacementKind.STRUCTURE, -1, -1, "botanical_table", -1,
+		GameConstants.BREAK_BASE_DAMAGE, GameConstants.PRIMARY_USE_COOLDOWN,
+		ToolKind.NONE, "", Vector2i(5, 0)),
 }
 
 ## Reverse lookup: string name -> integer ID. Keep in sync with registry.
@@ -69,6 +72,7 @@ static var by_name: Dictionary = {
 	"large_furnace": 3,
 	"stone_pickaxe": 4,
 	"wood": 5,
+	"botanical_table": 6,
 }
 
 ## Stable integer ID (never reuse a removed ID).
