@@ -1,35 +1,23 @@
 class_name ChunkData
 extends Resource
-const WORLD_PROP_CATALOG := preload("res://scripts/world/world_prop_catalog.gd")
+
 ## Data structure for a single 16x16 chunk of the world.
 ## Each cell holds two independent tile slots:
-##   ground — the floor (GroundTileProperties ID, -1 = void/chasm)
-##   top    — what sits on the floor (TileProperties ID, -1 = empty)
-## Player modifications override base tiles per layer independently.
-## Only modifications are saved to disk; base tiles are regenerated from noise.
+##   ground - the floor (GroundTileProperties ID, -1 = void/chasm)
+##   top    - what sits on the floor (TileProperties ID, -1 = empty)
+## Static world objects are anchored per chunk and stored as:
+##   - generated base objects
+##   - player additions
+##   - removals against generated base objects
 
-## Chunk coordinate in chunk-space (not tile-space).
 var chunk_coord: Vector2i
-
-## Ground-layer base tiles — flat array of 256 ints (16x16).
-## Index = y * CHUNK_SIZE + x. Value = GroundTileProperties ID (-1 = void).
 var ground_base_tiles: PackedInt32Array
-
-## Top-layer base tiles — flat array of 256 ints (16x16).
-## Value = TileProperties ID (-1 = empty).
 var top_base_tiles: PackedInt32Array
-
-## Sparse base world props. Key = local tile index, Value = WorldPropCatalog ID.
-var prop_base_cells: Dictionary = {}
-
-## Player modifications to the ground layer. Key = local tile index, Value = GroundTileProperties ID.
+var base_world_objects: Dictionary = {}
 var ground_modifications: Dictionary = {}
-
-## Player modifications to the top layer. Key = local tile index, Value = TileProperties ID.
 var top_modifications: Dictionary = {}
-
-## Player modifications to the prop layer. Key = local tile index, Value = WorldPropCatalog ID.
-var prop_modifications: Dictionary = {}
+var world_object_additions: Dictionary = {}
+var world_object_removals: Dictionary = {}
 
 
 func _init(coord: Vector2i = Vector2i.ZERO) -> void:
@@ -43,7 +31,6 @@ func _init(coord: Vector2i = Vector2i.ZERO) -> void:
 	top_base_tiles.fill(-1)
 
 
-## Returns the effective ground tile at a local position (modification overrides base).
 func get_ground_tile(local_x: int, local_y: int) -> int:
 	var idx: int = local_y * GameConstants.CHUNK_SIZE + local_x
 	if ground_modifications.has(idx):
@@ -51,7 +38,6 @@ func get_ground_tile(local_x: int, local_y: int) -> int:
 	return ground_base_tiles[idx]
 
 
-## Returns the effective top tile at a local position (modification overrides base).
 func get_top_tile(local_x: int, local_y: int) -> int:
 	var idx: int = local_y * GameConstants.CHUNK_SIZE + local_x
 	if top_modifications.has(idx):
@@ -59,64 +45,115 @@ func get_top_tile(local_x: int, local_y: int) -> int:
 	return top_base_tiles[idx]
 
 
-## Returns the effective world prop at a local position (modification overrides base).
-func get_prop(local_x: int, local_y: int) -> int:
-	var idx: int = local_y * GameConstants.CHUNK_SIZE + local_x
-	if prop_modifications.has(idx):
-		return prop_modifications[idx]
-	return int(prop_base_cells.get(idx, WORLD_PROP_CATALOG.EMPTY))
-
-
-## Records a player modification to the top layer at a local position.
 func set_top_modification(local_x: int, local_y: int, tile_id: int) -> void:
 	var idx: int = local_y * GameConstants.CHUNK_SIZE + local_x
 	top_modifications[idx] = tile_id
 
 
-## Records a player modification to the prop layer at a local position.
-func set_prop_modification(local_x: int, local_y: int, prop_id: int) -> void:
-	var idx: int = local_y * GameConstants.CHUNK_SIZE + local_x
-	prop_modifications[idx] = prop_id
-
-
-## Records a player modification to the ground layer at a local position.
 func set_ground_modification(local_x: int, local_y: int, ground_id: int) -> void:
 	var idx: int = local_y * GameConstants.CHUNK_SIZE + local_x
 	ground_modifications[idx] = ground_id
 
 
-## Returns true if either layer has player modifications.
+func add_base_world_object(local_origin: Vector2i, object_id: String) -> void:
+	base_world_objects[build_world_object_key(object_id, local_origin)] = {
+		"object_id": object_id,
+		"origin_x": local_origin.x,
+		"origin_y": local_origin.y,
+	}
+
+
+func get_effective_world_objects() -> Dictionary:
+	var effective: Dictionary = {}
+	for key in base_world_objects.keys():
+		if world_object_removals.has(String(key)):
+			continue
+		effective[String(key)] = (base_world_objects[key] as Dictionary).duplicate(true)
+	for key in world_object_additions.keys():
+		effective[String(key)] = (world_object_additions[key] as Dictionary).duplicate(true)
+	return effective
+
+
+func get_world_object_data(object_key: String) -> Dictionary:
+	if world_object_additions.has(object_key):
+		return (world_object_additions[object_key] as Dictionary).duplicate(true)
+	if world_object_removals.has(object_key):
+		return {}
+	if base_world_objects.has(object_key):
+		return (base_world_objects[object_key] as Dictionary).duplicate(true)
+	return {}
+
+
+func has_generated_world_object(object_key: String) -> bool:
+	return base_world_objects.has(object_key)
+
+
+func has_world_object(object_key: String) -> bool:
+	return not get_world_object_data(object_key).is_empty()
+
+
+func add_world_object_addition(local_origin: Vector2i, object_id: String) -> Dictionary:
+	var object_key := build_world_object_key(object_id, local_origin)
+	var data := {
+		"object_id": object_id,
+		"origin_x": local_origin.x,
+		"origin_y": local_origin.y,
+	}
+	world_object_additions[object_key] = data
+	world_object_removals.erase(object_key)
+	return data.duplicate(true)
+
+
+func remove_world_object(object_key: String) -> bool:
+	if world_object_additions.has(object_key):
+		world_object_additions.erase(object_key)
+		return true
+	if base_world_objects.has(object_key):
+		world_object_removals[object_key] = true
+		return true
+	return false
+
+
 func has_any_modifications() -> bool:
 	return (
 		not top_modifications.is_empty()
 		or not ground_modifications.is_empty()
-		or not prop_modifications.is_empty()
+		or not world_object_additions.is_empty()
+		or not world_object_removals.is_empty()
 	)
 
 
-## Serializes chunk data into a PackedByteArray for network transfer.
 func serialize() -> PackedByteArray:
 	var data: Dictionary = {
 		"cx": chunk_coord.x,
 		"cy": chunk_coord.y,
 		"ground": ground_base_tiles,
 		"top": top_base_tiles,
-		"props": prop_base_cells,
+		"base_world_objects": base_world_objects,
 		"ground_mods": ground_modifications,
 		"top_mods": top_modifications,
-		"prop_mods": prop_modifications,
+		"world_object_additions": world_object_additions,
+		"world_object_removals": world_object_removals,
 	}
 	return var_to_bytes(data)
 
 
-## Creates a ChunkData from a PackedByteArray received over the network.
 static func deserialize(bytes: PackedByteArray) -> ChunkData:
 	var data: Dictionary = bytes_to_var(bytes)
 	var chunk := ChunkData.new(Vector2i(data["cx"], data["cy"]))
 	chunk.ground_base_tiles = data["ground"]
 	chunk.top_base_tiles = data["top"]
-	chunk.prop_base_cells = data.get("props", {})
+	chunk.base_world_objects = data.get("base_world_objects", {})
 	chunk.ground_modifications = data.get("ground_mods", {})
 	chunk.top_modifications = data.get("top_mods", {})
-	chunk.prop_modifications = data.get("prop_mods", {})
+	chunk.world_object_additions = data.get("world_object_additions", {})
+	chunk.world_object_removals = data.get("world_object_removals", {})
 	return chunk
+
+
+static func build_world_object_key(object_id: String, local_origin: Vector2i) -> String:
+	return "%s:%s:%s" % [object_id, local_origin.x, local_origin.y]
+
+
+static func local_origin_from_data(data: Dictionary) -> Vector2i:
+	return Vector2i(int(data.get("origin_x", 0)), int(data.get("origin_y", 0)))

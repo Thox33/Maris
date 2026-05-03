@@ -1,5 +1,5 @@
 extends Node2D
-const WORLD_PROP_CATALOG := preload("res://scripts/world/world_prop_catalog.gd")
+var _world_object_catalog = preload("res://scripts/world/world_object_catalog.gd").new()
 ## Stateless procedural world generator.
 ## Produces ChunkData from noise — does not touch TileMapLayer directly.
 ## The ChunkManager orchestrates loading/unloading and network sync.
@@ -23,9 +23,9 @@ var world_seed: int = 0
 @onready var terrain_layer: TileMapLayer = $TerrainLayer
 @onready var base_visual_layer: TileMapLayer = $BaseVisualLayer
 @onready var decor_layer: TileMapLayer = $DepthSorted/DecorLayer
-@onready var world_props_node: Node2D = $DepthSorted/WorldProps
 @onready var chunk_manager: Node = $ChunkManager
-@onready var structure_manager: Node = $StructureManager
+@onready var world_object_manager: Node = $WorldObjectManager
+@onready var structure_manager: Node = world_object_manager
 @onready var depth_sorted: Node2D = $DepthSorted
 @onready var players_node: Node = $DepthSorted/Players
 @onready var chunk_debug_overlay: Node = $ChunkDebugCanvas/ChunkDebugOverlay
@@ -35,6 +35,7 @@ func _ready() -> void:
 	if chunk_manager != null and chunk_manager.has_method("setup"):
 		chunk_manager.setup(
 			self,
+			world_object_manager,
 			ground_layer,
 			ground_collision_layer,
 			liquid_layer,
@@ -42,11 +43,10 @@ func _ready() -> void:
 			base_visual_layer,
 			decor_layer,
 			depth_sorted,
-			world_props_node,
 			players_node
 		)
-	if structure_manager != null and structure_manager.has_method("setup"):
-		structure_manager.setup(self, chunk_manager, depth_sorted)
+	if world_object_manager != null and world_object_manager.has_method("setup"):
+		world_object_manager.setup(self, chunk_manager, depth_sorted)
 
 
 ## Initializes noise with the given seed. Must be called before generate_chunk().
@@ -169,7 +169,7 @@ func generate_chunk(coord: Vector2i) -> ChunkData:
 			chunk.ground_base_tiles[idx] = ground_id
 			chunk.top_base_tiles[idx] = _get_top_tile_for_position(world_x, world_y, ground_id)
 
-	# Pass 2: props with multi-cell reservation
+	# Pass 2: generated static world objects with multi-cell reservation
 	var reserved_cells: Dictionary = {}
 	for local_y in range(GameConstants.CHUNK_SIZE):
 		for local_x in range(GameConstants.CHUNK_SIZE):
@@ -179,14 +179,13 @@ func generate_chunk(coord: Vector2i) -> ChunkData:
 			var world_x: int = origin_x + local_x
 			var world_y: int = origin_y + local_y
 			var ground_id: int = chunk.ground_base_tiles[idx]
-			var prop_id := _get_prop_for_position(world_x, world_y, ground_id)
-			if prop_id == WORLD_PROP_CATALOG.EMPTY:
+			var object_id := _get_generated_world_object_for_position(world_x, world_y, ground_id)
+			if object_id.is_empty():
 				continue
-			var definition = WORLD_PROP_CATALOG.get_definition(prop_id)
+			var definition = _world_object_catalog.call("get_definition", object_id)
 			if definition == null:
 				continue
-			# Check all cells this prop covers
-			var offsets := definition.get_hit_cell_offsets()
+			var offsets: Array = definition.hit_cells
 			var can_place := true
 			for offset in offsets:
 				var nx: int = local_x + offset.x
@@ -211,14 +210,12 @@ func generate_chunk(coord: Vector2i) -> ChunkData:
 					break
 			if not can_place:
 				continue
-			chunk.prop_base_cells[idx] = prop_id
-			# Reserve all covered cells
+			chunk.add_base_world_object(Vector2i(local_x, local_y), object_id)
 			for offset in offsets:
 				var rx: int = local_x + offset.x
 				var ry: int = local_y + offset.y
 				var r_idx: int = ry * GameConstants.CHUNK_SIZE + rx
 				reserved_cells[r_idx] = true
-				# Clear top tiles under this prop
 				if chunk.top_base_tiles[r_idx] != TileProperties.EMPTY:
 					chunk.top_base_tiles[r_idx] = TileProperties.EMPTY
 
@@ -328,21 +325,21 @@ func _get_top_tile_for_position(x: int, y: int, ground_id: int) -> int:
 	return TileProperties.EMPTY
 
 
-func _get_prop_for_position(x: int, y: int, ground_id: int) -> int:
+func _get_generated_world_object_for_position(x: int, y: int, ground_id: int) -> String:
 	var ground_props := GroundTileProperties.get_properties(ground_id)
 	if ground_props == null or not ground_props.is_solid:
-		return WORLD_PROP_CATALOG.EMPTY
+		return ""
 
 	var n: float = noise.get_noise_2d(float(x), float(y))
 	var depth_ratio: float = float(y) / float(GameConstants.WORLD_SCALE)
 	var density: float = n + (depth_ratio * 1.5 - 0.5)
 
 	if density > 0.3:
-		return WORLD_PROP_CATALOG.EMPTY
+		return ""
 
 	# Coral: mid-density underwater-style areas
 	if density > 0.2 and n > 0.1:
-		var variants := WORLD_PROP_CATALOG.coral_variants
+		var variants: Array = _world_object_catalog.get("coral_variants")
 		var variant_index: int = absi(x * 73 + y * 137) % variants.size()
 		return variants[variant_index]
 
@@ -350,8 +347,8 @@ func _get_prop_for_position(x: int, y: int, ground_id: int) -> int:
 	if ground_props.name.begins_with("grass") and depth_ratio < 0.15:
 		var tree_noise: float = noise.get_noise_2d(float(x) * 2.3 + 500.0, float(y) * 2.3 + 500.0)
 		if tree_noise > 0.25:
-			var variants := WORLD_PROP_CATALOG.tree_variants
+			var variants: Array = _world_object_catalog.get("tree_variants")
 			var variant_index: int = absi(x * 59 + y * 113) % variants.size()
 			return variants[variant_index]
 
-	return WORLD_PROP_CATALOG.EMPTY
+	return ""

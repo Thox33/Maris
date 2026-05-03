@@ -1,5 +1,4 @@
 extends HumanoidActor
-const WORLD_PROP_CATALOG := preload("res://scripts/world/world_prop_catalog.gd")
 ## Player controller with top-down movement physics.
 ## Only the owning peer processes input. Remote peers are rendered from a
 ## short snapshot buffer for smoother movement.
@@ -12,7 +11,7 @@ const LOOK_NEUTRAL_HOVER_RADIUS: float = 12.0
 
 var _chunk_manager: Node
 var _terrain_layer: TileMapLayer
-var _structure_manager: Node
+var _world_object_manager: Node
 var _items_node: Node
 var _players_node: Node
 var _chunk_debug_overlay: Node
@@ -37,7 +36,7 @@ func setup_session(
 	players_node: Node,
 	terrain_layer: TileMapLayer,
 	chunk_manager: Node,
-	structure_manager: Node,
+	world_object_manager: Node,
 	use_authority_service: Node,
 	chunk_debug_overlay: Node = null,
 ) -> void:
@@ -46,7 +45,7 @@ func setup_session(
 	_players_node = players_node
 	_terrain_layer = terrain_layer
 	_chunk_manager = chunk_manager
-	_structure_manager = structure_manager
+	_world_object_manager = world_object_manager
 	_use_authority_service = use_authority_service
 	_chunk_debug_overlay = chunk_debug_overlay
 	if is_node_ready():
@@ -73,7 +72,7 @@ func _wire_session_dependencies() -> void:
 		_block_interaction.setup_session(
 			_terrain_layer,
 			_chunk_manager,
-			_structure_manager,
+			_world_object_manager,
 			_inventory_manager,
 			_use_authority_service
 		)
@@ -231,11 +230,12 @@ func _get_tile_speed_factor() -> float:
 		floori(global_position.x / GameConstants.TILE_SIZE),
 		floori(global_position.y / GameConstants.TILE_SIZE),
 	)
-	var prop_id: int = _chunk_manager.get_prop_at(tile_coord)
-	if prop_id != WORLD_PROP_CATALOG.EMPTY:
-		var prop_definition = WORLD_PROP_CATALOG.get_definition(prop_id)
-		if prop_definition != null:
-			return prop_definition.move_speed_factor
+	if _world_object_manager != null and _world_object_manager.has_method("get_move_speed_factor_at"):
+		var world_object_speed_factor := float(
+			_world_object_manager.get_move_speed_factor_at(tile_coord)
+		)
+		if world_object_speed_factor < 1.0:
+			return world_object_speed_factor
 
 	var tile_id: int = _chunk_manager.get_top_tile_at(tile_coord)
 	if tile_id == TileProperties.EMPTY:

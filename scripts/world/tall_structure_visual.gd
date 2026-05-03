@@ -13,6 +13,8 @@ var _collision_rects: Array[Dictionary] = []
 var _break_stage: int = -1
 var _crack_texture: Texture2D = null
 var _grid_anchor_offset_px: Vector2 = Vector2(GameConstants.TILE_SIZE / 2.0, GameConstants.TILE_SIZE)
+var _visual_options: Dictionary = {}
+var _is_breaking: bool = false
 
 
 func _ready() -> void:
@@ -27,12 +29,14 @@ func configure_parts(
 		GameConstants.TILE_SIZE / 2.0,
 		GameConstants.TILE_SIZE
 	),
+	p_visual_options: Dictionary = {},
 ) -> void:
 	_parts = []
 	for part in parts:
 		_parts.append(part.duplicate(true))
 	collision_enabled = p_collision_enabled
 	_grid_anchor_offset_px = p_grid_anchor_offset_px
+	_visual_options = p_visual_options.duplicate(true)
 	_collision_rects = []
 	for rect in p_collision_rects:
 		_collision_rects.append(rect.duplicate(true))
@@ -54,6 +58,40 @@ func clear_break_visual() -> void:
 		_refresh_break_visual()
 
 
+func get_break_visual_center() -> Vector2:
+	if _parts.is_empty():
+		return global_position
+	var bounds := Rect2()
+	var initialized := false
+	for part in _parts:
+		var offset := part.get("offset", Vector2.ZERO) as Vector2
+		var size := part.get("size_px", Vector2(tile_size, tile_size)) as Vector2
+		var rect := Rect2(offset, size)
+		if not initialized:
+			bounds = rect
+			initialized = true
+		else:
+			bounds = bounds.merge(rect)
+	return to_global(bounds.position + bounds.size * 0.5)
+
+
+func play_break_completion_feedback(duration: float) -> void:
+	if _is_breaking:
+		return
+	_is_breaking = true
+	clear_break_visual()
+	_disable_collision()
+	var tween := create_tween()
+	tween.set_parallel(true)
+	for child in _parts_root.get_children():
+		if child is Sprite2D:
+			var sprite := child as Sprite2D
+			tween.tween_property(sprite, "modulate:a", 0.0, duration)
+			tween.tween_property(sprite, "scale", Vector2(0.94, 0.94), duration)
+	tween.set_parallel(false)
+	tween.tween_callback(queue_free)
+
+
 func _refresh_visual() -> void:
 	for child in _parts_root.get_children():
 		child.queue_free()
@@ -62,14 +100,15 @@ func _refresh_visual() -> void:
 		for part in _parts:
 			var atlas_coord := part.get("atlas_coord", Vector2i.ZERO) as Vector2i
 			var offset := part.get("offset", Vector2.ZERO) as Vector2
+			var size_px := part.get("size_px", Vector2(tile_size, tile_size)) as Vector2
 			var part_z_index := int(part.get("z_index", 0))
 
 			var sprite := Sprite2D.new()
-			sprite.texture = _make_atlas_texture(atlas_coord)
+			sprite.texture = _make_atlas_texture(atlas_coord, size_px)
 			sprite.centered = false
 			sprite.position = offset
 			sprite.z_index = part_z_index
-			sprite.material = _build_part_material(offset)
+			sprite.material = _build_part_material(offset, size_px)
 			_parts_root.add_child(sprite)
 
 	for child in _static_body.get_children():
@@ -100,19 +139,32 @@ func _refresh_visual() -> void:
 	_refresh_break_visual()
 
 
-func _build_part_material(part_offset: Vector2) -> Material:
+func _build_part_material(part_offset: Vector2, part_size_px: Vector2) -> Material:
 	var shader := load("res://assets/shaders/vegetation_sway.gdshader") as Shader
 	if shader == null:
 		return null
 	var shader_material := ShaderMaterial.new()
 	shader_material.shader = shader
 	shader_material.set_shader_parameter("tile_size", float(tile_size))
-	shader_material.set_shader_parameter("sprite_height_px", float(tile_size))
-	shader_material.set_shader_parameter("rigid_base_px", float(tile_size))
-	shader_material.set_shader_parameter("sway_amount", 0.0)
-	shader_material.set_shader_parameter("sway_speed", 0.0)
+	shader_material.set_shader_parameter("sprite_height_px", part_size_px.y)
+	shader_material.set_shader_parameter(
+		"rigid_base_px",
+		float(_visual_options.get("rigid_base_px", float(tile_size)))
+	)
+	shader_material.set_shader_parameter(
+		"sway_amount",
+		float(_visual_options.get("sway_amount", 0.0))
+		if bool(_visual_options.get("sway_enabled", false))
+		else 0.0
+	)
+	shader_material.set_shader_parameter(
+		"sway_speed",
+		float(_visual_options.get("sway_speed", 0.0))
+		if bool(_visual_options.get("sway_enabled", false))
+		else 0.0
+	)
 	shader_material.set_shader_parameter("explicit_phase_mix", 1.0)
-	shader_material.set_shader_parameter("phase_seed", 0.0)
+	shader_material.set_shader_parameter("phase_seed", float(_visual_options.get("phase_seed", 0.0)))
 	shader_material.set_shader_parameter("crack_enabled", false)
 	shader_material.set_shader_parameter("crack_stage", -1.0)
 	shader_material.set_shader_parameter("crack_frame_count", float(GameConstants.BREAK_STAGE_COUNT))
@@ -130,7 +182,10 @@ func _refresh_break_visual() -> void:
 			continue
 		var shader_material := sprite.material as ShaderMaterial
 		if shader_material == null:
-			shader_material = _build_part_material(sprite.position) as ShaderMaterial
+			shader_material = _build_part_material(
+				sprite.position,
+				_resolve_part_size_for_sprite(sprite)
+			) as ShaderMaterial
 			sprite.material = shader_material
 		if shader_material == null:
 			continue
@@ -144,8 +199,21 @@ func _refresh_break_visual() -> void:
 		)
 
 
-func _make_atlas_texture(coord: Vector2i) -> AtlasTexture:
+func _make_atlas_texture(coord: Vector2i, size_px: Vector2) -> AtlasTexture:
 	var atlas := AtlasTexture.new()
 	atlas.atlas = atlas_texture
-	atlas.region = Rect2(coord.x * tile_size, coord.y * tile_size, tile_size, tile_size)
+	atlas.region = Rect2(coord.x * tile_size, coord.y * tile_size, size_px.x, size_px.y)
 	return atlas
+
+
+func _resolve_part_size_for_sprite(sprite: Sprite2D) -> Vector2:
+	if sprite.texture is AtlasTexture:
+		return (sprite.texture as AtlasTexture).region.size
+	return Vector2(tile_size, tile_size)
+
+
+func _disable_collision() -> void:
+	for child in _static_body.get_children():
+		if child is CollisionShape2D:
+			(child as CollisionShape2D).set_deferred("disabled", true)
+	_static_body.process_mode = Node.PROCESS_MODE_DISABLED

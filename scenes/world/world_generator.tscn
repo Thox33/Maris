@@ -12,7 +12,7 @@
 [ext_resource type="TileSet" path="res://assets/tilesets/terrain_tileset.tres" id="2"]
 [ext_resource type="Script" path="res://scripts/world/chunk_manager.gd" id="3"]
 [ext_resource type="Script" path="res://scripts/world/chunk_debug_overlay.gd" id="4"]
-[ext_resource type="Script" path="res://scripts/world/structure_manager.gd" id="5"]
+[ext_resource type="Script" path="res://scripts/world/world_object_manager.gd" id="5"]
 
 [node name="WorldGenerator" type="Node2D"]
 script = ExtResource("1")
@@ -51,7 +51,7 @@ y_sort_enabled = true
 [node name="ChunkManager" type="Node" parent="."]
 script = ExtResource("3")
 
-[node name="StructureManager" type="Node" parent="."]
+[node name="WorldObjectManager" type="Node" parent="."]
 script = ExtResource("5")
 
 [node name="ChunkDebugCanvas" type="CanvasLayer" parent="."]

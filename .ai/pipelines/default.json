@@ -5,7 +5,7 @@
     {
       "name": "planner",
       "role": "planner",
-      "provider": "claude",
+      "provider": "codex",
       "enabled": true
     },
     {

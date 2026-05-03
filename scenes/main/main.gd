@@ -46,11 +46,13 @@ func _ready() -> void:
 	_player_spawner.spawn_function = Callable(_player_spawn_service, "create_player")
 	_item_spawner.spawn_function = Callable(_world_drop_service, "create_item_entity")
 
-	_world_placement_service.setup(_players, world.chunk_manager, world.structure_manager)
+	_world_placement_service.setup(_players, world.chunk_manager, world.world_object_manager)
 	inventory_manager.setup(
 		_inventory_authority_service, _world_placement_service, _players, _world_drop_service
 	)
-	_use_authority_service.setup(_players, world.chunk_manager, world.structure_manager, inventory_manager)
+	_use_authority_service.setup(
+		_players, world.chunk_manager, world.world_object_manager, inventory_manager
+	)
 	_break_visual_service.setup(world, world.depth_sorted)
 	_use_authority_service.damaged_target_updated.connect(
 		Callable(_break_visual_service, "apply_damaged_target")

@@ -1,8 +1,8 @@
 extends Node
+var _world_object_catalog = preload("res://scripts/world/world_object_catalog.gd").new()
 
 const TARGET_KIND_TILE := "tile"
-const TARGET_KIND_PROP := "prop"
-const TARGET_KIND_STRUCTURE := "structure"
+const TARGET_KIND_WORLD_OBJECT := "world_object"
 
 const _CRACK_TEXTURE_PATH := "res://assets/effects/break_cracks.png"
 const _SAMPLE_COUNT: int = 12
@@ -14,7 +14,7 @@ const _PARTICLE_LIFETIME_MAX: float = 0.55
 
 var world: Node2D
 var _chunk_manager: Node
-var _structure_manager: Node
+var _world_object_manager: Node
 var _effect_parent: Node2D
 var _effect_root: Node2D
 var _crack_texture: Texture2D
@@ -28,14 +28,13 @@ var _pixel_texture: ImageTexture = null
 func setup(p_world: Node2D, p_visual_parent: Node2D) -> void:
 	world = p_world
 	_chunk_manager = p_world.chunk_manager if p_world != null else null
-	_structure_manager = p_world.structure_manager if p_world != null else null
+	_world_object_manager = p_world.world_object_manager if p_world != null else null
 	_effect_parent = p_visual_parent
 	_ensure_effect_root()
 	_ensure_crack_texture()
 	_connect_breakable_visual_signals()
 	GameEvents.block_broken.connect(_on_block_broken)
-	GameEvents.prop_broken.connect(_on_prop_broken)
-	GameEvents.structure_broken.connect(_on_structure_broken)
+	GameEvents.world_object_broken.connect(_on_world_object_broken)
 
 
 func apply_damaged_target(target_key: String, target_data: Dictionary) -> void:
@@ -62,17 +61,17 @@ func _connect_breakable_visual_signals() -> void:
 	):
 		_chunk_manager.connect("breakable_world_visual_created", on_visual_created)
 	if (
-		_chunk_manager != null
-		and _chunk_manager.has_signal("breakable_world_visual_detached")
-		and not _chunk_manager.is_connected("breakable_world_visual_detached", on_visual_detached)
+		_world_object_manager != null
+		and _world_object_manager.has_signal("breakable_world_visual_created")
+		and not _world_object_manager.is_connected("breakable_world_visual_created", on_visual_created)
 	):
-		_chunk_manager.connect("breakable_world_visual_detached", on_visual_detached)
+		_world_object_manager.connect("breakable_world_visual_created", on_visual_created)
 	if (
-		_structure_manager != null
-		and _structure_manager.has_signal("breakable_world_visual_created")
-		and not _structure_manager.is_connected("breakable_world_visual_created", on_visual_created)
+		_world_object_manager != null
+		and _world_object_manager.has_signal("breakable_world_visual_detached")
+		and not _world_object_manager.is_connected("breakable_world_visual_detached", on_visual_detached)
 	):
-		_structure_manager.connect("breakable_world_visual_created", on_visual_created)
+		_world_object_manager.connect("breakable_world_visual_detached", on_visual_detached)
 
 
 func _ensure_effect_root() -> void:
@@ -122,28 +121,23 @@ func _on_block_broken(coord: Vector2i, tile_id: int) -> void:
 	_spawn_break_particles(_cell_center(coord), _sample_tile_colors(tile_id))
 
 
-func _on_prop_broken(coord: Vector2i, prop_id: int) -> void:
-	var target_key := _prop_target_key(coord)
+func _on_world_object_broken(object_id: String, origin: Vector2i, world_pos: Vector2) -> void:
+	var target_key := _world_object_target_key(object_id, origin)
 	var detached_visual := _consume_detached_break_completion_visual(target_key)
 	if detached_visual != null:
 		_clear_break_visual(detached_visual)
 
-	var center := _cell_center(coord)
+	var center := world_pos
 	if detached_visual != null and detached_visual.has_method("get_break_visual_center"):
 		center = detached_visual.get_break_visual_center()
 
-	_spawn_break_particles(center, _sample_prop_colors(prop_id))
+	_spawn_break_particles(center, _sample_world_object_colors(object_id))
 
-	if detached_visual == null:
-		return
-	if detached_visual.has_method("play_break_completion_feedback"):
-		detached_visual.play_break_completion_feedback(_PARTICLE_LIFETIME_MAX)
-	else:
-		detached_visual.queue_free()
-
-
-func _on_structure_broken(structure_id: String, world_pos: Vector2) -> void:
-	_spawn_break_particles(world_pos, _sample_structure_colors(structure_id))
+	if detached_visual != null:
+		if detached_visual.has_method("play_break_completion_feedback"):
+			detached_visual.play_break_completion_feedback(_PARTICLE_LIFETIME_MAX)
+		else:
+			detached_visual.queue_free()
 
 
 func _sample_tile_colors(tile_id: int) -> Array[Color]:
@@ -168,12 +162,17 @@ func _sample_tile_colors(tile_id: int) -> Array[Color]:
 	return sampled
 
 
-func _sample_structure_colors(structure_id: String) -> Array[Color]:
-	if _tile_colors_cache.has("s:" + structure_id):
-		return _tile_colors_cache["s:" + structure_id]
+func _sample_world_object_colors(object_id: String) -> Array[Color]:
+	var cache_key := "w:" + object_id
+	if _tile_colors_cache.has(cache_key):
+		return _tile_colors_cache[cache_key]
 
-	var definition := StructureCatalog.get_definition(structure_id)
-	if definition == null or definition.visual_parts.is_empty():
+	var definition = _world_object_catalog.call("get_definition", object_id)
+	if definition == null:
+		return [Color.WHITE]
+
+	var visual_parts: Array = definition.build_visual_parts()
+	if visual_parts.is_empty():
 		return [Color.WHITE]
 
 	var image := _load_atlas_image(definition.atlas_texture_path)
@@ -182,9 +181,16 @@ func _sample_structure_colors(structure_id: String) -> Array[Color]:
 
 	var ts := GameConstants.TILE_SIZE
 	var all_pixels: Array[Color] = []
-	for part in definition.visual_parts:
+	for part in visual_parts:
 		var coord := part.get("atlas_coord", Vector2i.ZERO) as Vector2i
-		var part_pixels := _sample_region(image, coord.x * ts, coord.y * ts, ts, ts)
+		var size_px := part.get("size_px", Vector2(ts, ts)) as Vector2
+		var part_pixels := _sample_region(
+			image,
+			coord.x * ts,
+			coord.y * ts,
+			maxi(1, int(size_px.x)),
+			maxi(1, int(size_px.y))
+		)
 		all_pixels.append_array(part_pixels)
 
 	# Shuffle and trim to _SAMPLE_COUNT so all parts contribute roughly equally.
@@ -193,31 +199,6 @@ func _sample_structure_colors(structure_id: String) -> Array[Color]:
 	if sampled.is_empty():
 		sampled.append(Color.WHITE)
 
-	_tile_colors_cache["s:" + structure_id] = sampled
-	return sampled
-
-
-func _sample_prop_colors(prop_id: int) -> Array[Color]:
-	var cache_key := "p:%s" % prop_id
-	if _tile_colors_cache.has(cache_key):
-		return _tile_colors_cache[cache_key]
-
-	var definition: WorldPropDefinition = WorldPropCatalog.get_definition(prop_id)
-	if definition == null:
-		return [Color.WHITE]
-
-	var atlas_path := definition.atlas_texture_path
-	var image := _load_atlas_image(atlas_path)
-	if image == null:
-		return [Color.WHITE]
-
-	var sampled := _sample_region(
-		image,
-		definition.atlas_coord.x * GameConstants.TILE_SIZE,
-		definition.atlas_coord.y * GameConstants.TILE_SIZE,
-		int(definition.sprite_size_px.x),
-		int(definition.sprite_size_px.y)
-	)
 	_tile_colors_cache[cache_key] = sampled
 	return sampled
 
@@ -290,17 +271,15 @@ func _get_pixel_texture() -> ImageTexture:
 
 func _resolve_visual_for_target(target_key: String, target_data: Dictionary) -> Node:
 	var kind := String(target_data.get("kind", _target_kind_from_key(target_key)))
-	if kind == TARGET_KIND_PROP:
-		return _get_world_prop_visual(_coord_from_target(target_key, target_data))
 	if kind == TARGET_KIND_TILE:
 		return _get_breakable_tile_visual(_coord_from_target(target_key, target_data))
-	if kind == TARGET_KIND_STRUCTURE:
-		var structure_target := _structure_target_from_data(target_key, target_data)
-		if structure_target.is_empty():
+	if kind == TARGET_KIND_WORLD_OBJECT:
+		var world_object_target := _world_object_target_from_data(target_key, target_data)
+		if world_object_target.is_empty():
 			return null
-		return _get_structure_visual(
-			String(structure_target.get("structure_id", "")),
-			structure_target.get("origin", Vector2i.ZERO) as Vector2i
+		return _get_world_object_visual(
+			String(world_object_target.get("object_id", "")),
+			world_object_target.get("origin", Vector2i.ZERO) as Vector2i
 		)
 	return null
 
@@ -320,22 +299,16 @@ func _clear_break_visual(target_visual: Node) -> void:
 	target_visual.clear_break_visual()
 
 
-func _get_world_prop_visual(coord: Vector2i) -> Node:
-	if _chunk_manager == null or not _chunk_manager.has_method("get_world_prop_visual"):
-		return null
-	return _chunk_manager.get_world_prop_visual(coord) as Node
-
-
 func _get_breakable_tile_visual(coord: Vector2i) -> Node:
 	if _chunk_manager == null or not _chunk_manager.has_method("get_breakable_tile_visual"):
 		return null
 	return _chunk_manager.get_breakable_tile_visual(coord) as Node
 
 
-func _get_structure_visual(structure_id: String, origin: Vector2i) -> Node:
-	if _structure_manager == null or not _structure_manager.has_method("get_structure_visual"):
+func _get_world_object_visual(object_id: String, origin: Vector2i) -> Node:
+	if _world_object_manager == null or not _world_object_manager.has_method("get_world_object_visual"):
 		return null
-	return _structure_manager.get_structure_visual(structure_id, origin) as Node
+	return _world_object_manager.get_world_object_visual(object_id, origin) as Node
 
 
 func _on_breakable_world_visual_created(target_key: String, visual: Node) -> void:
@@ -368,14 +341,10 @@ func _coord_from_target(target_key: String, target_data: Dictionary) -> Vector2i
 	return Vector2i(int(parts[1]), int(parts[2]))
 
 
-func _structure_target_from_data(target_key: String, target_data: Dictionary) -> Dictionary:
-	if (
-		target_data.has("structure_id")
-		and target_data.has("origin_x")
-		and target_data.has("origin_y")
-	):
+func _world_object_target_from_data(target_key: String, target_data: Dictionary) -> Dictionary:
+	if target_data.has("object_id") and target_data.has("origin_x") and target_data.has("origin_y"):
 		return {
-			"structure_id": String(target_data.get("structure_id", "")),
+			"object_id": String(target_data.get("object_id", "")),
 			"origin": Vector2i(int(target_data.get("origin_x", 0)), int(target_data.get("origin_y", 0))),
 		}
 
@@ -383,7 +352,7 @@ func _structure_target_from_data(target_key: String, target_data: Dictionary) ->
 	if parts.size() != 4:
 		return {}
 	return {
-		"structure_id": parts[1],
+		"object_id": parts[1],
 		"origin": Vector2i(int(parts[2]), int(parts[3])),
 	}
 
@@ -396,8 +365,8 @@ func _consume_detached_break_completion_visual(target_key: String) -> Node:
 	return visual
 
 
-func _prop_target_key(coord: Vector2i) -> String:
-	return "prop:%s:%s" % [coord.x, coord.y]
+func _world_object_target_key(object_id: String, origin: Vector2i) -> String:
+	return "world_object:%s:%s:%s" % [object_id, origin.x, origin.y]
 
 
 func _cell_center(coord: Vector2i) -> Vector2:

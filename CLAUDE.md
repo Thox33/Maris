@@ -17,7 +17,7 @@ Main (Node2D)                         scenes/main/main.gd
 |  |- BaseVisualLayer (TileMapLayer)  terrain_tileset.tres
 |  |- DepthSorted/DecorLayer          terrain_tileset.tres
 |  |- ChunkManager (Node)             scripts/world/chunk_manager.gd
-|  `- StructureManager (Node)         scripts/world/structure_manager.gd
+|  `- WorldObjectManager (Node)       scripts/world/world_object_manager.gd
 |- Players (Node2D)
 |  `- <PeerId> (CharacterBody2D)      scenes/player/player.gd
 |     |- CollisionShape2D
@@ -88,7 +88,7 @@ Main (Node2D)                         scenes/main/main.gd
 - `BlockInteraction` handles local input, range checks, and intent submission.
 - `UseAuthorityService` is host-authoritative for primary use / breaking.
 - `ChunkManager` applies canonical top-tile mutations and synchronizes them.
-- `StructureManager` keeps structure occupancy separate from tile data.
+- `WorldObjectManager` owns shared static world object occupancy, placement, breaking, visuals, and chunk-local persistence for generated props and placed stations.
 
 ### Networking
 - Host-as-server or dedicated server.

@@ -6,7 +6,7 @@ See also:
 - [`actor_model.md`](actor_model.md)
 - [`../decisions/authority_model.md`](../decisions/authority_model.md)
 
-Status: 2026-04-10
+Status: 2026-05-03
 
 ## Multiplayer Model
 
@@ -17,7 +17,7 @@ The current lobby flow uses port `7777` and supports up to 4 players.
 The project uses a hybrid authority model rather than one blanket rule:
 
 - player movement is trusted co-op and owning-peer-authoritative
-- inventory, placement, chunk mutation, structure mutation, and persistence are host-authoritative
+- inventory, placement, chunk mutation, static world object mutation, and persistence are host-authoritative
 - primary use / breaking is host-authoritative for damage, cooldown, crack stage, and completion
 
 See [`../decisions/authority_model.md`](../decisions/authority_model.md) for the accepted direction and tradeoffs.
@@ -65,10 +65,10 @@ main.tscn  (game session composition root)
     TerrainLayer      - hidden authoritative top-tile layer for collision / speed checks
     BaseVisualLayer   - visible flat top-tile visuals
     ChunkManager
-    StructureManager
+    WorldObjectManager
     DepthSorted
       DecorLayer      - cheap sway decor tiles that still stay tile-based
-      WorldProps      - node-based vegetation props with foot-pivot y-sorting
+      Static world object visuals - spawned at runtime for trees, coral, and stations
       Players         - populated by MultiplayerSpawner
       BreakEffects    - created at runtime by BreakVisualService for break particles only
     ChunkDebugCanvas
@@ -117,7 +117,7 @@ Current service ownership:
 - `BreakVisualService` - central fixed crack-frame asset loading, shared break-state application onto breakable world visuals, and prop break-completion feedback on detached visuals
 - `InventoryManager` - RPC bridge and local client sync surface for inventory state
 - `InventoryAuthorityService` - canonical host-side inventory rules and held-slot state
-- `WorldPlacementService` - host-side placement validation against world and structure occupancy
+- `WorldPlacementService` - host-side placement validation against world and static-world-object occupied footprints
 
 This ownership split is current architecture, not an in-progress migration.
 
@@ -128,7 +128,7 @@ Host boot
   -> SessionBootstrapService activates the selected world
   -> load or create world seed
   -> world.initialize(seed)
-  -> load structures from save
+  -> migrate legacy structure saves into chunk-local world object data when needed
   -> host local join handled through SessionJoinService
 
 Client boot
@@ -146,7 +146,6 @@ Host receives _client_ready
 PlayerSpawnService.complete_join()
   -> choose saved or default spawn position
   -> preload chunks around spawn
-  -> sync structures to the joining peer
   -> PlayerSpawner.spawn({peer_id, x, y, character_name, appearance})
   -> create / restore inventory
 ```
@@ -189,7 +188,7 @@ Legacy flat saves are normalized on load so old worlds remain readable.
 ## Tile System
 
 `TileProperties` (`scripts/world/tile_properties.gd`) is the single source of truth for top-layer tiles.
-`WorldPropCatalog` (`scripts/world/world_prop_catalog.gd`) is the static registry for node-based world props such as coral and trees.
+`WorldObjectCatalog` (`scripts/world/world_object_catalog.gd`) is the shared definition registry for static world objects such as coral, trees, furnaces, anvils, and workbenches.
 
 Current gameplay-facing fields:
 
@@ -217,19 +216,19 @@ TileProperties.EMPTY      - no top tile
 
 Integer IDs are permanent and must never be reassigned.
 
-Current world prop surface:
+Current static world object surface:
 
 ```text
-WorldPropCatalog.registry - int ID -> WorldPropDefinition
-WorldPropCatalog.by_name  - string name -> int ID
-WorldPropCatalog.EMPTY    - no prop at this cell
+WorldObjectCatalog.registry               - string object id -> WorldObjectDefinition
+WorldObjectCatalog.by_legacy_prop_id      - legacy prop int -> object id
+WorldObjectCatalog.by_legacy_structure_id - legacy structure id -> object id
 ```
 
-Coral and trees live on this prop path. Trees use a separate atlas (`tree_props.png`)
-with 16x32 sprites (1 tile wide, 2 tiles tall) anchored at the foot pivot. The legacy
-coral tile IDs remain in `TileProperties` for compatibility with old saves and item/icon
-references, but runtime chunk loading migrates old coral top-tile modifications into
-sparse prop modifications.
+Compatibility adapters still exist at `WorldPropCatalog` and `StructureCatalog`, but they
+now resolve into the shared world-object registry instead of owning separate runtime or
+save architectures. Coral and trees still use the tall prop-style atlas path, while
+stations still use `structure_tiles.png`, but both travel through the same definition and
+runtime manager contract.
 
 ## Asset Workflow
 
@@ -243,7 +242,7 @@ sparse prop modifications.
 ## Chunk System And World Rendering
 
 - the world is divided into `16x16`-tile chunks
-- `ChunkData` stores `ground_base_tiles`, `top_base_tiles`, and sparse `prop_base_cells`, plus per-layer modifications
+- `ChunkData` stores `ground_base_tiles`, `top_base_tiles`, chunk-generated `base_world_objects`, and sparse chunk-local world object diffs
 - `ChunkManager` polls player positions every `0.2s`
 - load radius is `3`, unload radius is `5`
 - the host generates chunks via `FastNoiseLite`
@@ -257,17 +256,21 @@ Current layer split:
 - `TerrainLayer` is the authoritative top-tile occupancy layer used for collision and movement-speed checks
 - `BaseVisualLayer` renders the visible flat block sprites for `FLAT_BASE` tiles
 - `DecorLayer` lives inside the depth-sorted branch for cheap tile-based sway decor that still renders via `TileMapLayer`
-- `WorldProps` lives inside the depth-sorted branch and owns node-based prop instances such as coral and trees
-- tall structure blocks use runtime `Node2D` visuals instead of a single flat tile
-- coral and trees are generated, replicated, saved, and broken through the prop layer
-- trees use per-prop atlas textures with tall sprite regions (16x32) and trunk-only collision
-- break crack-state is rendered on the actual world visual node for breakable tiles, props, and structures, so occlusion and y-sorting follow the same render object
+- `WorldObjectManager` is the canonical shared static world object runtime manager
+- `StructureManager` remains as a compatibility script alias for older callers and scene references
+- trees, coral, and placeable stations all spawn through the same runtime object path and share occupancy, break, hit, and visual lookup contracts
+- decorative multi-cell world-object visuals can overlap other objects on non-occupied cells; only occupied footprint cells block new placement, while hit / break lookup still resolves the overlapping runtime objects
+- runtime world-object activation derives `covered_chunks` from the object's world-space cells and keeps the object alive while at least one covered chunk remains loaded
+- covered-chunk activation is lifecycle-only; it does not force-load neighboring chunks or expand the chunk streaming radius
+- trees still use tall prop-style atlas regions and trunk-only collision, but no longer live on a separate persistence path
+- break crack-state is rendered on the actual world visual node for breakable tiles and static world objects, so occlusion and y-sorting follow the same render object
 
 Persistence behavior:
 
-- modified chunks are kept in `ChunkData.top_modifications`, `ChunkData.ground_modifications`, and `ChunkData.prop_modifications`
+- modified chunks are kept in `ChunkData.top_modifications`, `ChunkData.ground_modifications`, `ChunkData.world_object_additions`, and `ChunkData.world_object_removals`
 - modified chunks are saved on unload and during autosave
 - chunk base terrain is regenerated from seed on load
+- generated trees/coral persist as base chunk data plus removals, while player-placed stations persist as chunk-local additions
 
 Current pragmatic runtime note:
 
@@ -320,4 +323,4 @@ These numbers describe the current implementation, not a strict future-proof con
 
 ## Movement Model
 
-There is no gravity. Players move freely in all directions via `move_and_slide()` with a velocity vector controlled by input on both axes. Movement speed is modulated by the non-solid world content the player overlaps: empty cells use `1.0x`, props such as coral and trees use the prop definition's `move_speed_factor`, and non-solid top tiles still use their tile `move_speed_factor`.
+There is no gravity. Players move freely in all directions via `move_and_slide()` with a velocity vector controlled by input on both axes. Movement speed is modulated by the non-solid world content the player overlaps: empty cells use `1.0x`, static world objects such as coral and trees use the shared world-object definition's `move_speed_factor`, and non-solid top tiles still use their tile `move_speed_factor`.

@@ -28,19 +28,29 @@ signal block_broken(coord: Vector2i, tile_id: int)
 signal block_placed(coord: Vector2i, tile_id: int)
 
 ## A world prop was broken and removed from the world.
-## Fired by: ChunkManager
+## Compatibility signal. Fired by: WorldObjectManager
 @warning_ignore("unused_signal")
 signal prop_broken(coord: Vector2i, prop_id: int)
 
 ## A world prop was placed into the world.
-## Fired by: ChunkManager
+## Compatibility signal. Fired by: WorldObjectManager
 @warning_ignore("unused_signal")
 signal prop_placed(coord: Vector2i, prop_id: int)
 
 ## A placed structure was broken and removed from the world.
-## Fired by: StructureManager
+## Compatibility signal. Fired by: WorldObjectManager
 @warning_ignore("unused_signal")
 signal structure_broken(structure_id: String, world_pos: Vector2)
+
+## A static world object was placed into the world.
+## Fired by: WorldObjectManager
+@warning_ignore("unused_signal")
+signal world_object_placed(object_id: String, origin: Vector2i)
+
+## A static world object was broken and removed from the world.
+## Fired by: WorldObjectManager
+@warning_ignore("unused_signal")
+signal world_object_broken(object_id: String, origin: Vector2i, world_pos: Vector2)
 
 # --- Player events (server-side) ---
 

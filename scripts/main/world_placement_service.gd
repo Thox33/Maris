@@ -1,16 +1,17 @@
 extends Node
+var _world_object_catalog = preload("res://scripts/world/world_object_catalog.gd").new()
 
 ## Validates and applies world placement requests independently from inventory state.
 
 var players_node: Node
 var chunk_manager: Node
-var structure_manager: Node
+var world_object_manager: Node
 
 
-func setup(p_players_node: Node, p_chunk_manager: Node, p_structure_manager: Node) -> void:
+func setup(p_players_node: Node, p_chunk_manager: Node, p_world_object_manager: Node) -> void:
 	players_node = p_players_node
 	chunk_manager = p_chunk_manager
-	structure_manager = p_structure_manager
+	world_object_manager = p_world_object_manager
 
 
 func validate_and_place_world_item(sender_id: int, item_id: int, coord: Vector2i) -> bool:
@@ -37,22 +38,20 @@ func validate_and_place_world_item(sender_id: int, item_id: int, coord: Vector2i
 	if item_props.places_tile():
 		if not chunk_manager.can_place_top_tile_at(coord):
 			return false
-		if structure_manager != null and structure_manager.is_cell_occupied(coord):
+		if world_object_manager != null and world_object_manager.is_cell_occupied(coord):
 			return false
 		chunk_manager.place_tile(coord, item_props.tile_id)
 		return true
 
-	if item_props.places_prop():
-		if not chunk_manager.can_place_prop_at(coord):
+	if item_props.places_world_object():
+		if world_object_manager == null:
 			return false
-		if structure_manager != null and structure_manager.is_cell_occupied(coord):
+		var definition = _world_object_catalog.call(
+			"get_definition",
+			item_props.get_placed_world_object_id()
+		)
+		if definition == null:
 			return false
-		chunk_manager.place_prop(coord, item_props.prop_id)
-		return true
-
-	if item_props.places_structure():
-		if structure_manager == null:
-			return false
-		return structure_manager.place_structure(coord, item_props.structure_id)
+		return world_object_manager.place_world_object(coord, definition.id)
 
 	return false

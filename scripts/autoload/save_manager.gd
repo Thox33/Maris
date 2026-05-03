@@ -15,7 +15,8 @@ const CHARACTER_APPEARANCE := preload("res://scripts/actor/character_appearance.
 ## then add migration logic in _migrate_world_meta().
 ## v2: chunk saves split into {"top": ..., "ground": ...} dicts (ground/top layer model).
 ## v3: chunk saves add sparse {"props": ...} modifications for node-based world props.
-const SAVE_VERSION: int = 3
+## v4: chunk saves replace prop/structure split with chunk-local static world object diffs.
+const SAVE_VERSION: int = 4
 
 ## Emitted on the server when an auto-save tick fires.
 ## Main connects to this to orchestrate saving all systems.
@@ -104,7 +105,7 @@ func load_world_meta() -> Dictionary:
 # --- Chunk persistence ---
 
 
-## Saves top, ground, and prop modifications for a chunk (base terrain regenerates).
+## Saves top, ground, and static world object modifications for a chunk.
 ## Deletes the save file if the chunk has no modifications (keeps disk clean).
 func save_chunk(coord: Vector2i, chunk: ChunkData) -> void:
 	var path := _chunk_path(coord)
@@ -115,13 +116,14 @@ func save_chunk(coord: Vector2i, chunk: ChunkData) -> void:
 	var data := {
 		"top": chunk.top_modifications,
 		"ground": chunk.ground_modifications,
-		"props": chunk.prop_modifications,
+		"world_object_additions": chunk.world_object_additions,
+		"world_object_removals": chunk.world_object_removals,
 	}
 	_write_bytes(path, var_to_bytes(data))
 
 
 ## Loads chunk modifications from disk. Returns empty Dictionary if none saved.
-## Format: {"top": {index: tile_id, ...}, "ground": {index: ground_id, ...}, "props": {index: prop_id, ...}}
+## Supports legacy prop modifications and migrated world object diffs.
 func load_chunk_modifications(coord: Vector2i) -> Dictionary:
 	var path := _chunk_path(coord)
 	if not FileAccess.file_exists(path):
@@ -146,15 +148,16 @@ func save_all_chunks(loaded_chunks: Dictionary) -> void:
 	if saved_count > 0:
 		print("[SaveManager] Saved %d modified chunk(s)" % saved_count)
 
-
-func save_structures(structures: Array[Dictionary]) -> void:
-	_write_json(_world_dir + "structures.json", {"structures": structures})
-
-
 func load_structures() -> Array:
 	var data := _read_json(_world_dir + "structures.json")
 	var structures: Variant = data.get("structures", [])
 	return structures if structures is Array else []
+
+
+func delete_legacy_structures_save() -> void:
+	var path := _world_dir + "structures.json"
+	if FileAccess.file_exists(path):
+		DirAccess.remove_absolute(path)
 
 
 # --- Player persistence ---

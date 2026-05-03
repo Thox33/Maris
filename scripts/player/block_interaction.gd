@@ -1,5 +1,4 @@
 extends Node2D
-const WORLD_PROP_CATALOG := preload("res://scripts/world/world_prop_catalog.gd")
 ## Handles block breaking and placing interaction for the player.
 ## Breaking: tracks progress, sends authoritative use intent, and lets BreakVisualService update the target visual.
 ## Placing: sends intent (slot + coord) to InventoryManager for host validation.
@@ -9,7 +8,7 @@ const WORLD_INPUT_BLOCKER_GROUP := &"world_input_blocking_ui"
 var _player: CharacterBody2D
 var _terrain_layer: TileMapLayer
 var _chunk_manager: Node
-var _structure_manager: Node
+var _world_object_manager: Node
 var _inventory_manager: Node
 var _use_authority_service: Node
 
@@ -23,13 +22,13 @@ var _break_keepalive_timer: float = 0.0
 func setup_session(
 	terrain_layer: TileMapLayer,
 	chunk_manager: Node,
-	structure_manager: Node,
+	world_object_manager: Node,
 	inventory_manager: Node,
 	use_authority_service: Node,
 ) -> void:
 	_terrain_layer = terrain_layer
 	_chunk_manager = chunk_manager
-	_structure_manager = structure_manager
+	_world_object_manager = world_object_manager
 	_inventory_manager = inventory_manager
 	_use_authority_service = use_authority_service
 
@@ -105,9 +104,7 @@ func _handle_placing() -> void:
 	var coord := _terrain_layer.local_to_map(mouse_world)
 	if _chunk_manager != null and _chunk_manager.get_top_tile_at(coord) != TileProperties.EMPTY:
 		return
-	if _chunk_manager != null and _chunk_manager.get_prop_at(coord) != WORLD_PROP_CATALOG.EMPTY:
-		return
-	if _structure_manager != null and _structure_manager.is_cell_occupied(coord):
+	if _world_object_manager != null and _world_object_manager.is_cell_occupied(coord):
 		return
 
 	_request_place_block(coord)
@@ -143,9 +140,7 @@ func _handle_held_item_placing() -> void:
 	var coord := _terrain_layer.local_to_map(mouse_world)
 	if _chunk_manager != null and _chunk_manager.get_top_tile_at(coord) != TileProperties.EMPTY:
 		return
-	if _chunk_manager != null and _chunk_manager.get_prop_at(coord) != WORLD_PROP_CATALOG.EMPTY:
-		return
-	if _structure_manager != null and _structure_manager.is_cell_occupied(coord):
+	if _world_object_manager != null and _world_object_manager.is_cell_occupied(coord):
 		return
 
 	_request_place_held_block(coord)
@@ -168,39 +163,26 @@ func _is_mouse_over_world_blocking_ui() -> bool:
 
 
 func _resolve_break_coord(coord: Vector2i) -> Vector2i:
-	if _chunk_manager == null:
-		return coord
-	if _chunk_manager.get_prop_at(coord) != WORLD_PROP_CATALOG.EMPTY:
+	if _world_object_manager == null:
 		return coord
 	if _chunk_manager.get_top_tile_at(coord) != TileProperties.EMPTY:
 		return coord
-	if _structure_manager != null:
-		var structure_data := _structure_manager.get_breakable_structure_data(coord) as Dictionary
-		if not structure_data.is_empty():
-			return coord
-	var resolved: Dictionary = _chunk_manager.resolve_prop_at(coord)
+	var resolved := _world_object_manager.resolve_breakable_world_object_at(coord) as Dictionary
 	if not resolved.is_empty():
-		return resolved["foot_cell"] as Vector2i
+		return resolved.get("origin", coord) as Vector2i
 	return coord
 
 
 func _has_breakable_target(coord: Vector2i) -> bool:
 	if _chunk_manager != null:
-		var prop_id: int = _chunk_manager.get_prop_at(coord)
-		if prop_id != WORLD_PROP_CATALOG.EMPTY:
-			var prop_definition = WORLD_PROP_CATALOG.get_definition(prop_id)
-			if prop_definition != null and prop_definition.breakable:
-				return true
-
 		var tile_id: int = _chunk_manager.get_top_tile_at(coord)
 		if tile_id != TileProperties.EMPTY:
 			var props: TileProperties = TileProperties.get_properties(tile_id)
 			if props != null and props.breakable:
 				return true
 
-	if _structure_manager != null:
-		var structure_data := _structure_manager.get_breakable_structure_data(coord) as Dictionary
-		if not structure_data.is_empty():
+	if _world_object_manager != null:
+		if not (_world_object_manager.resolve_breakable_world_object_at(coord) as Dictionary).is_empty():
 			return true
 
 	return false

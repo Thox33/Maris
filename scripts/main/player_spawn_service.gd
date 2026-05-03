@@ -2,7 +2,6 @@ extends Node
 
 const PLAYER_SCENE := preload("res://scenes/player/player.tscn")
 const CHARACTER_APPEARANCE := preload("res://scripts/actor/character_appearance.gd")
-const WORLD_PROP_CATALOG := preload("res://scripts/world/world_prop_catalog.gd")
 const SPAWN_SEARCH_X := 0
 const SPAWN_SEARCH_Y_RANGE := 40
 
@@ -61,7 +60,7 @@ func create_player(data: Dictionary) -> Node:
 			players_node,
 			world.terrain_layer,
 			world.chunk_manager,
-			world.structure_manager,
+			world.world_object_manager,
 			use_authority_service,
 			world.chunk_debug_overlay
 		)
@@ -85,7 +84,10 @@ func _find_clear_spawn() -> Vector2:
 			if ground_props != null and ground_props.is_solid:
 				if (
 					cm.get_top_tile_at(coord) == TileProperties.EMPTY
-					and cm.get_prop_at(coord) == WORLD_PROP_CATALOG.EMPTY
+					and (
+						world.world_object_manager == null
+						or not world.world_object_manager.is_cell_occupied(coord)
+					)
 				):
 					return Vector2(
 						coord.x * GameConstants.TILE_SIZE + GameConstants.TILE_SIZE / 2.0,
@@ -117,8 +119,6 @@ func complete_join(peer_id: int, player_record: Dictionary) -> void:
 		var origin := Vector2(GameConstants.TILE_SIZE / 2.0, GameConstants.TILE_SIZE / 2.0)
 		world.chunk_manager.load_chunks_around(origin)
 		pos = get_spawn_position()
-	world.structure_manager.sync_full_state_to_peer(peer_id)
-
 	var player_id := str(peer_id)
 	if not players_node.has_node(player_id):
 		player_spawner.spawn(

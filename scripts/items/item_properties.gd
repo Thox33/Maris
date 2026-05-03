@@ -16,8 +16,7 @@ const INVALID_ICON_COORD := Vector2i(-1, -1)
 enum PlacementKind {
 	NONE,
 	TILE,
-	PROP,
-	STRUCTURE,
+	WORLD_OBJECT,
 }
 
 enum ToolKind {
@@ -28,16 +27,16 @@ enum ToolKind {
 ## Master registry: stable integer ID -> ItemProperties.
 ## To add an item: append a new entry with the next unused ID.
 static var registry: Dictionary = {
-	0: ItemProperties.new(0, "sand", 64, PlacementKind.TILE, 0, -1, "", -1,
+	0: ItemProperties.new(0, "sand", 64, PlacementKind.TILE, 0, "", -1, "", -1,
 		GameConstants.BREAK_BASE_DAMAGE, GameConstants.PRIMARY_USE_COOLDOWN,
 		ToolKind.NONE, "", Vector2i(0, 0)),
-	1: ItemProperties.new(1, "stone", 64, PlacementKind.TILE, 1, -1, "", -1,
+	1: ItemProperties.new(1, "stone", 64, PlacementKind.TILE, 1, "", -1, "", -1,
 		GameConstants.BREAK_BASE_DAMAGE, GameConstants.PRIMARY_USE_COOLDOWN,
 		ToolKind.NONE, "", Vector2i(1, 0)),
-	2: ItemProperties.new(2, "coral", 64, PlacementKind.PROP, -1, 0, "", -1,
+	2: ItemProperties.new(2, "coral", 64, PlacementKind.WORLD_OBJECT, -1, "coral", 0, "", -1,
 		GameConstants.BREAK_BASE_DAMAGE, GameConstants.PRIMARY_USE_COOLDOWN,
 		ToolKind.NONE, "", Vector2i(2, 0)),
-	3: ItemProperties.new(3, "large_furnace", 16, PlacementKind.STRUCTURE, -1, -1, "large_furnace", -1,
+	3: ItemProperties.new(3, "large_furnace", 16, PlacementKind.WORLD_OBJECT, -1, "large_furnace", -1, "large_furnace", -1,
 		GameConstants.BREAK_BASE_DAMAGE, GameConstants.PRIMARY_USE_COOLDOWN,
 		ToolKind.NONE, "", Vector2i(4, 0)),
 	4: ItemProperties.new(
@@ -46,6 +45,7 @@ static var registry: Dictionary = {
 		1,
 		PlacementKind.NONE,
 		-1,
+		"",
 		-1,
 		"",
 		-1,
@@ -56,16 +56,16 @@ static var registry: Dictionary = {
 		Vector2i(0, 0),
 		ITEM_HOLD_STYLE_CATALOG.STYLE_TOOL_UP_RIGHT
 	),
-	5: ItemProperties.new(5, "wood", 64, PlacementKind.NONE, -1, 6, "", -1,
+	5: ItemProperties.new(5, "wood", 64, PlacementKind.NONE, -1, "", 6, "", -1,
 		GameConstants.BREAK_BASE_DAMAGE, GameConstants.PRIMARY_USE_COOLDOWN,
 		ToolKind.NONE, "", Vector2i(3, 0)),
-	6: ItemProperties.new(6, "botanical_table", 16, PlacementKind.STRUCTURE, -1, -1, "botanical_table", -1,
+	6: ItemProperties.new(6, "botanical_table", 16, PlacementKind.WORLD_OBJECT, -1, "botanical_table", -1, "botanical_table", -1,
 		GameConstants.BREAK_BASE_DAMAGE, GameConstants.PRIMARY_USE_COOLDOWN,
 		ToolKind.NONE, "", Vector2i(5, 0)),
-	7: ItemProperties.new(7, "anvil", 16, PlacementKind.STRUCTURE, -1, -1, "anvil", -1,
+	7: ItemProperties.new(7, "anvil", 16, PlacementKind.WORLD_OBJECT, -1, "anvil", -1, "anvil", -1,
 		GameConstants.BREAK_BASE_DAMAGE, GameConstants.PRIMARY_USE_COOLDOWN,
 		ToolKind.NONE, "", Vector2i(6, 0)),
-	8: ItemProperties.new(8, "work_bench", 16, PlacementKind.STRUCTURE, -1, -1, "work_bench", -1,
+	8: ItemProperties.new(8, "work_bench", 16, PlacementKind.WORLD_OBJECT, -1, "work_bench", -1, "work_bench", -1,
 		GameConstants.BREAK_BASE_DAMAGE, GameConstants.PRIMARY_USE_COOLDOWN,
 		ToolKind.NONE, "", Vector2i(7, 0)),
 }
@@ -93,9 +93,11 @@ var max_stack: int
 var placement_kind: PlacementKind
 ## Which tile this item places when used. -1 = not a tile-placement item.
 var tile_id: int
-## Which world prop this item places when used. -1 = not a prop-placement item.
+## Which static world object this item places when used. Empty = not a world-object placement item.
+var world_object_id: String
+## Compatibility field used by legacy prop drop/item mappings.
 var prop_id: int
-## Which structure this item places when used. Empty = not a structure-placement item.
+## Compatibility field used by legacy structure drop/item mappings.
 var structure_id: String
 ## Tile used to render this item in the UI/world.
 var icon_tile_id: int
@@ -123,6 +125,7 @@ func _init(
 	p_max_stack: int,
 	p_placement_kind: PlacementKind,
 	p_tile_id: int = -1,
+	p_world_object_id: String = "",
 	p_prop_id: int = -1,
 	p_structure_id: String = "",
 	p_icon_tile_id: int = -1,
@@ -140,6 +143,7 @@ func _init(
 	max_stack = p_max_stack
 	placement_kind = p_placement_kind
 	tile_id = p_tile_id
+	world_object_id = p_world_object_id
 	prop_id = p_prop_id
 	structure_id = p_structure_id
 	icon_tile_id = p_icon_tile_id if p_icon_tile_id >= 0 else p_tile_id
@@ -189,12 +193,20 @@ func places_tile() -> bool:
 	return placement_kind == PlacementKind.TILE and tile_id != -1
 
 
+func places_world_object() -> bool:
+	return placement_kind == PlacementKind.WORLD_OBJECT and not world_object_id.is_empty()
+
+
+func get_placed_world_object_id() -> String:
+	return world_object_id
+
+
 func places_prop() -> bool:
-	return placement_kind == PlacementKind.PROP and prop_id != -1
+	return places_world_object() and prop_id != -1
 
 
 func places_structure() -> bool:
-	return placement_kind == PlacementKind.STRUCTURE and not structure_id.is_empty()
+	return places_world_object() and not structure_id.is_empty()
 
 
 func get_icon_tile_id() -> int:

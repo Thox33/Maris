@@ -1,28 +1,12 @@
 class_name WorldPropDefinition
-extends RefCounted
-## Immutable definition for a single-cell world prop anchored at its foot pivot.
+extends "res://scripts/world/world_object_definition.gd"
 
-const DEFAULT_ATLAS_PATH := "res://assets/tilesets/terrain_tiles.png"
-
-var id: int
 var name: String
 var atlas_coord: Vector2i
-var atlas_texture_path: String
-var anchor_offset_px: Vector2
 var sprite_size_px: Vector2
 var collision_rects: Array[Dictionary]
 var breakable: bool
-var break_hardness: float
-var move_speed_factor: float
-var placement_variants: Array[int]
 var drop_prop_id: int
-var sway_enabled: bool
-var sway_amount: float
-var sway_speed: float
-var rigid_base_px: float
-## Ground types this prop may be placed on (e.g. ["grass"], ["sand"]).
-## Empty array means any solid ground is allowed.
-var allowed_ground_names: Array[String]
 
 
 func _init(
@@ -31,11 +15,11 @@ func _init(
 	p_atlas_coord: Vector2i,
 	p_anchor_offset_px: Vector2 = Vector2(GameConstants.TILE_SIZE / 2.0, GameConstants.TILE_SIZE),
 	p_sprite_size_px: Vector2 = Vector2(GameConstants.TILE_SIZE, GameConstants.TILE_SIZE),
-	p_collision_rects: Array[Dictionary] = [],
+	p_collision_rects: Array = [],
 	p_breakable: bool = true,
 	p_break_hardness: float = 1.0,
 	p_move_speed_factor: float = 1.0,
-	p_placement_variants: Array[int] = [],
+	p_placement_variants: Array = [],
 	p_drop_prop_id: int = -1,
 	p_sway_enabled: bool = false,
 	p_sway_amount: float = 4.0,
@@ -44,71 +28,116 @@ func _init(
 	p_atlas_texture_path: String = DEFAULT_ATLAS_PATH,
 	p_allowed_ground_names: Array[String] = [],
 ) -> void:
-	id = p_id
 	name = p_name
 	atlas_coord = p_atlas_coord
-	anchor_offset_px = p_anchor_offset_px
 	sprite_size_px = p_sprite_size_px
-	collision_rects = p_collision_rects.duplicate(true)
+	collision_rects = []
+	for rect_variant in p_collision_rects:
+		if not (rect_variant is Dictionary):
+			continue
+		collision_rects.append((rect_variant as Dictionary).duplicate(true))
 	breakable = p_breakable
-	break_hardness = maxf(p_break_hardness, 0.0)
-	move_speed_factor = p_move_speed_factor
-	placement_variants = p_placement_variants.duplicate()
 	drop_prop_id = p_drop_prop_id if p_drop_prop_id >= 0 else p_id
-	sway_enabled = p_sway_enabled
-	sway_amount = maxf(p_sway_amount, 0.0)
-	sway_speed = maxf(p_sway_speed, 0.0)
-	rigid_base_px = maxf(p_rigid_base_px, 0.0)
-	atlas_texture_path = p_atlas_texture_path
-	allowed_ground_names = p_allowed_ground_names.duplicate()
 
+	var resolved_placement_variants: Array[String] = []
+	for variant in p_placement_variants:
+		resolved_placement_variants.append(String(variant))
 
-## Returns true if the given ground name is valid for this prop.
-## Empty allowed_ground_names means any solid ground is accepted.
-func is_ground_allowed(ground_name: String) -> bool:
-	if allowed_ground_names.is_empty():
-		return true
-	for allowed in allowed_ground_names:
-		if ground_name.begins_with(allowed):
-			return true
-	return false
-
-
-func get_world_position(cell: Vector2i) -> Vector2:
-	return Vector2(
-		cell.x * GameConstants.TILE_SIZE + anchor_offset_px.x,
-		cell.y * GameConstants.TILE_SIZE + anchor_offset_px.y
+	super._init(
+		p_name,
+		KIND_PROP,
+		_build_cells(
+			p_atlas_coord,
+			p_anchor_offset_px,
+			p_sprite_size_px,
+			p_collision_rects,
+			p_breakable
+		),
+		p_anchor_offset_px,
+		Vector2i.ZERO,
+		p_atlas_texture_path,
+		p_break_hardness,
+		p_move_speed_factor,
+		resolved_placement_variants,
+		p_name,
+		p_sway_enabled,
+		p_sway_amount,
+		p_sway_speed,
+		p_rigid_base_px,
+		p_allowed_ground_names,
+		p_id,
+		""
 	)
+
+
+func build_collision_rects(_tile_size_px: int = GameConstants.TILE_SIZE) -> Array[Dictionary]:
+	var rects: Array[Dictionary] = []
+	for rect in collision_rects:
+		rects.append(rect.duplicate(true))
+	return rects
 
 
 func get_sprite_offset() -> Vector2:
 	return Vector2(-anchor_offset_px.x, -sprite_size_px.y)
 
 
-func build_collision_rects() -> Array[Dictionary]:
-	return collision_rects.duplicate(true)
-
-
 func get_hit_cell_offsets() -> Array[Vector2i]:
-	var rect := Rect2(Vector2(0.0, anchor_offset_px.y - sprite_size_px.y), sprite_size_px)
-	var min_x := floori(rect.position.x / float(GameConstants.TILE_SIZE))
-	var min_y := floori(rect.position.y / float(GameConstants.TILE_SIZE))
-	var max_x := ceili((rect.position.x + rect.size.x) / float(GameConstants.TILE_SIZE)) - 1
-	var max_y := ceili((rect.position.y + rect.size.y) / float(GameConstants.TILE_SIZE)) - 1
+	return hit_cells.duplicate()
 
-	var offsets: Array[Vector2i] = []
+
+static func _build_cells(
+	p_atlas_coord: Vector2i,
+	p_anchor_offset_px: Vector2,
+	p_sprite_size_px: Vector2,
+	p_collision_rects: Array,
+	p_breakable: bool
+) -> Array[Dictionary]:
+	var cells_by_key: Dictionary = {}
+	var sprite_rect := Rect2(
+		Vector2(0.0, p_anchor_offset_px.y - p_sprite_size_px.y),
+		p_sprite_size_px
+	)
+	var min_x := floori(sprite_rect.position.x / float(GameConstants.TILE_SIZE))
+	var min_y := floori(sprite_rect.position.y / float(GameConstants.TILE_SIZE))
+	var max_x := ceili((sprite_rect.position.x + sprite_rect.size.x) / float(GameConstants.TILE_SIZE)) - 1
+	var max_y := ceili((sprite_rect.position.y + sprite_rect.size.y) / float(GameConstants.TILE_SIZE)) - 1
+
 	for y in range(min_y, max_y + 1):
 		for x in range(min_x, max_x + 1):
-			offsets.append(Vector2i(x, y))
-	return offsets
+			var cell := Vector2i(x, y)
+			cells_by_key[_cell_key(cell)] = {
+				"cell": cell,
+				"hit": true,
+				"breakable": p_breakable,
+			}
+
+	var origin_key := _cell_key(Vector2i.ZERO)
+	if not cells_by_key.has(origin_key):
+		cells_by_key[origin_key] = {
+			"cell": Vector2i.ZERO,
+			"hit": true,
+			"breakable": p_breakable,
+		}
+
+	var origin_cell := cells_by_key[origin_key] as Dictionary
+	origin_cell["occupied"] = true
+	origin_cell["collides"] = not p_collision_rects.is_empty()
+	origin_cell["collision_rects"] = p_collision_rects.duplicate(true)
+	origin_cell["visual_parts"] = [
+		{
+			"atlas_coord": p_atlas_coord,
+			"offset": Vector2(-p_anchor_offset_px.x, -p_sprite_size_px.y),
+			"size_px": p_sprite_size_px,
+			"z_index": 0,
+		}
+	]
+	cells_by_key[origin_key] = origin_cell
+
+	var result: Array[Dictionary] = []
+	for cell_key in cells_by_key.keys():
+		result.append((cells_by_key[cell_key] as Dictionary).duplicate(true))
+	return result
 
 
-func covers_hit_cell(foot_cell: Vector2i, hit_cell: Vector2i) -> bool:
-	return hit_cell in get_hit_world_cells(foot_cell)
-
-
-func get_hit_world_cells(foot_cell: Vector2i) -> Array[Vector2i]:
-	var cells: Array[Vector2i] = []
-	for offset in get_hit_cell_offsets():
-		cells.append(foot_cell + offset)
-	return cells
+static func _cell_key(cell: Vector2i) -> String:
+	return "%s:%s" % [cell.x, cell.y]

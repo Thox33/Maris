@@ -23,7 +23,7 @@ func bootstrap_session(world_name: String, dedicated_server: bool) -> void:
 		var seed_value: int = persistence_service.load_or_create_seed()
 		print("[SessionBootstrapService] Initializing world '%s' with seed %d" % [world_name, seed_value])
 		world.initialize(seed_value)
-		world.structure_manager.load_from_save()
+		world.world_object_manager.load_from_save()
 
 		if dedicated_server:
 			world.chunk_manager.load_chunks_around(player_spawn_service.get_spawn_position())

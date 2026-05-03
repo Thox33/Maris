@@ -91,7 +91,6 @@ func save_world() -> void:
 
 	SaveManager.save_world_meta(world.world_seed)
 	SaveManager.save_all_chunks(world.chunk_manager.loaded_chunks)
-	world.structure_manager.save_to_disk()
 
 	for player in players_node.get_children():
 		var peer_id: int = player.name.to_int()
