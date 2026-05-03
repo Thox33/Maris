@@ -15,6 +15,8 @@ static func _build_registry() -> Dictionary:
 	return {
 		"large_furnace": _build_large_furnace_definition(),
 		"botanical_table": _build_botanical_table_definition(),
+		"anvil": _build_anvil_definition(),
+		"work_bench": _build_work_bench_definition(),
 	}
 
 
@@ -118,6 +120,118 @@ static func _build_botanical_table_definition() -> StructureDefinition:
 
 	return StructureDefinition.new(
 		"botanical_table",
+		footprint,
+		occupied_cells,
+		collision_cells,
+		occupied_cells,
+		parts,
+		anchor,
+		Vector2i(1, 1),
+		STRUCTURE_ATLAS_PATH,
+		2.0
+	)
+
+
+static func _build_anvil_definition() -> StructureDefinition:
+	var footprint := Vector2i(3, 2)
+	var anchor := _build_south_center_anchor(footprint)
+	var occupied_cells := _build_rect_cells(footprint.x, footprint.y)
+	var collision_cells: Array[Vector2i] = [
+		Vector2i(0, 1),
+		Vector2i(1, 1),
+		Vector2i(2, 1),
+	]
+	var parts: Array[Dictionary] = [
+		{
+			"atlas_coord": Vector2i(0, 5),
+			"offset": _cell_top_left_offset(anchor, Vector2i(0, 0)),
+			"z_index": 1,
+		},
+		{
+			"atlas_coord": Vector2i(1, 5),
+			"offset": _cell_top_left_offset(anchor, Vector2i(1, 0)),
+			"z_index": 1,
+		},
+		{
+			"atlas_coord": Vector2i(2, 5),
+			"offset": _cell_top_left_offset(anchor, Vector2i(2, 0)),
+			"z_index": 1,
+		},
+		{
+			"atlas_coord": Vector2i(0, 6),
+			"offset": _cell_top_left_offset(anchor, Vector2i(0, 1)),
+			"z_index": 0,
+		},
+		{
+			"atlas_coord": Vector2i(1, 6),
+			"offset": _cell_top_left_offset(anchor, Vector2i(1, 1)),
+			"z_index": 0,
+		},
+		{
+			"atlas_coord": Vector2i(2, 6),
+			"offset": _cell_top_left_offset(anchor, Vector2i(2, 1)),
+			"z_index": 0,
+		},
+	]
+
+	return StructureDefinition.new(
+		"anvil",
+		footprint,
+		occupied_cells,
+		collision_cells,
+		occupied_cells,
+		parts,
+		anchor,
+		Vector2i(1, 1),
+		STRUCTURE_ATLAS_PATH,
+		2.0
+	)
+
+
+static func _build_work_bench_definition() -> StructureDefinition:
+	var footprint := Vector2i(3, 2)
+	var anchor := _build_south_center_anchor(footprint)
+	var occupied_cells := _build_rect_cells(footprint.x, footprint.y)
+	var collision_cells: Array[Vector2i] = [
+		Vector2i(0, 1),
+		Vector2i(1, 1),
+		Vector2i(2, 1),
+	]
+	var parts: Array[Dictionary] = [
+		{
+			"atlas_coord": Vector2i(0, 7),
+			"offset": _cell_top_left_offset(anchor, Vector2i(0, 0)),
+			"z_index": 1,
+		},
+		{
+			"atlas_coord": Vector2i(1, 7),
+			"offset": _cell_top_left_offset(anchor, Vector2i(1, 0)),
+			"z_index": 1,
+		},
+		{
+			"atlas_coord": Vector2i(2, 7),
+			"offset": _cell_top_left_offset(anchor, Vector2i(2, 0)),
+			"z_index": 1,
+		},
+		{
+			"atlas_coord": Vector2i(0, 8),
+			"offset": _cell_top_left_offset(anchor, Vector2i(0, 1)),
+			"z_index": 0,
+		},
+		{
+			"atlas_coord": Vector2i(1, 8),
+			"offset": _cell_top_left_offset(anchor, Vector2i(1, 1)),
+			"z_index": 0,
+		},
+		{
+			"atlas_coord": Vector2i(2, 8),
+			"offset": _cell_top_left_offset(anchor, Vector2i(2, 1)),
+			"z_index": 0,
+		},
+	]
+
+	return StructureDefinition.new(
+		"work_bench",
 		footprint,
 		occupied_cells,
 		collision_cells,
