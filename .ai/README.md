@@ -7,6 +7,7 @@ Goals:
 - keep roles model-agnostic
 - allow `codex` and `claude` to be swapped per run
 - start small: planner, builder, reviewer
+- run cheap local verification automatically before final review
 
 Current layout:
 - `orchestrator.md` autonomy policy for the main assistant
@@ -18,6 +19,7 @@ Current layout:
 - `runs/` generated prompt/result artifacts for real executions
 - `run.ps1` single-role entry point
 - `pipeline.ps1` multi-stage entry point
+- `tasks/` materialized task files that the orchestrator can hand to the pipeline
 
 Usage examples:
 
@@ -54,8 +56,38 @@ Notes:
 - `builder` and `planner` return normal text unless a schema is supplied explicitly.
 - Provider-specific behavior is intentionally thin in `v1`; the role files remain the source of truth.
 - Real runs snapshot `task.md`, `prompt.md`, and `result.txt` under `.ai/runs/<timestamp>-<role>-<provider>/`.
-- `pipeline.ps1` runs the configured stages in one go and stops automatically on reviewer failure when the pipeline config says so.
+- `pipeline.ps1` runs the configured stages in one go, supports provider fallbacks per stage, and stops automatically on verify or reviewer failure when the pipeline config says so.
 - `pipeline.ps1` prepares a scoped reviewer task from the requested context files and their diff, so review targets the feature change set instead of the whole dirty worktree.
+- The default pipeline now includes a local `verify` stage for cheap headless Godot checks before review.
+- Reviewer stages can declare `accepted_review_findings` patterns for known, explicitly tolerated findings; unmatched findings still fail the run.
+- Successful pipeline runs keep the current run directory and prune older `.ai/runs/*` artifacts when `post_run.cleanup_run_artifacts` is enabled.
+- Pipeline summaries now include the run directory, per-stage status, and changed files from the resulting diff.
+
+Default pipeline shape:
+
+```json
+{
+  "stages": [
+    { "name": "planner", "role": "planner", "provider": "codex", "fallback_providers": ["claude"] },
+    { "name": "builder", "role": "builder", "provider": "codex", "fallback_providers": ["claude"] },
+    {
+      "name": "verify",
+      "role": "verify",
+      "provider": "powershell",
+      "commands": [
+        { "name": "project-parse", "command": "godot --headless --quit --path ." }
+      ]
+    },
+    {
+      "name": "reviewer",
+      "role": "reviewer",
+      "provider": "codex",
+      "fallback_providers": ["claude"],
+      "accepted_review_findings": []
+    }
+  ]
+}
+```
 
 Orchestrator expectations:
 - for concrete implementation tasks, the orchestrator should be pipeline-first: use `.ai/pipeline.ps1` rather than editing repo files directly

@@ -20,6 +20,7 @@ var _hit_cells: Dictionary = {}
 var _breakable_cells: Dictionary = {}
 var _world_object_keys_by_chunk: Dictionary = {}
 var _world_object_loaded_chunk_refs_by_key: Dictionary = {}
+var _coverage_origin_bounds: Dictionary = {}
 
 
 func setup(p_world_generator: Node2D, p_chunk_manager: Node, p_depth_sorted_node: Node2D) -> void:
@@ -50,10 +51,9 @@ func apply_saved_world_object_modifications(chunk: ChunkData, saved: Dictionary)
 
 func apply_chunk_objects(chunk: ChunkData) -> void:
 	clear_chunk_objects(chunk.chunk_coord)
-	_add_existing_chunk_references(chunk.chunk_coord)
-	var effective_objects := chunk.get_effective_world_objects()
-	for object_key_variant in effective_objects.keys():
-		var object_data := effective_objects[object_key_variant] as Dictionary
+	var covering_objects := _prepare_chunk_covering_world_objects(chunk)
+	for object_key_variant in covering_objects.keys():
+		var object_data := covering_objects[object_key_variant] as Dictionary
 		if object_data.is_empty():
 			continue
 		_register_world_object_instance(chunk.chunk_coord, object_data)
@@ -124,8 +124,8 @@ func place_world_object(target_cell: Vector2i, object_id: String) -> bool:
 		return false
 
 	var local_origin := _world_to_local(origin, chunk.chunk_coord)
-	var object_data := chunk.add_world_object_addition(local_origin, placed_object_id)
-	_register_world_object_instance(chunk.chunk_coord, object_data)
+	chunk.add_world_object_addition(local_origin, placed_object_id)
+	_add_world_object_to_loaded_chunk_coverages(placed_object_id, origin)
 
 	if multiplayer.multiplayer_peer != null:
 		_sync_place_world_object.rpc(placed_object_id, origin.x, origin.y)
@@ -143,6 +143,7 @@ func break_world_object_instance(object_id: String, origin: Vector2i) -> bool:
 	if not _remove_world_object_from_chunk(object_id, origin):
 		return false
 
+	_remove_world_object_from_loaded_chunk_coverages(object_id, origin)
 	_remove_world_object_instance(_world_object_key(object_id, origin), true)
 	if multiplayer.multiplayer_peer != null:
 		_sync_break_world_object.rpc(object_id, origin.x, origin.y)
@@ -168,11 +169,7 @@ func get_structure_visual(structure_id: String, origin: Vector2i) -> Node:
 @rpc("authority", "reliable")
 func _sync_place_world_object(object_id: String, origin_x: int, origin_y: int) -> void:
 	var origin := Vector2i(origin_x, origin_y)
-	var chunk := _get_loaded_chunk(_cell_to_chunk(origin))
-	if chunk != null:
-		var local_origin := _world_to_local(origin, chunk.chunk_coord)
-		var object_data := chunk.add_world_object_addition(local_origin, object_id)
-		_register_world_object_instance(chunk.chunk_coord, object_data)
+	_add_world_object_to_loaded_chunk_coverages(object_id, origin)
 	_emit_world_object_placed(object_id, origin)
 
 
@@ -181,6 +178,7 @@ func _sync_break_world_object(object_id: String, origin_x: int, origin_y: int) -
 	var origin := Vector2i(origin_x, origin_y)
 	var world_pos := _get_break_world_pos(object_id, origin)
 	_remove_world_object_from_chunk(object_id, origin)
+	_remove_world_object_from_loaded_chunk_coverages(object_id, origin)
 	_remove_world_object_instance(_world_object_key(object_id, origin), true)
 	_emit_world_object_broken(object_id, origin, world_pos)
 
@@ -191,8 +189,7 @@ func _register_world_object_instance(chunk_coord: Vector2i, object_data: Diction
 	if definition == null:
 		return
 
-	var local_origin := ChunkData.local_origin_from_data(object_data)
-	var origin := _local_to_world(local_origin, chunk_coord)
+	var origin := Vector2i(int(object_data.get("origin_x", 0)), int(object_data.get("origin_y", 0)))
 	var object_key := _world_object_key(object_id, origin)
 	if _world_objects_by_key.has(object_key):
 		_add_loaded_chunk_reference(object_key, chunk_coord)
@@ -207,16 +204,10 @@ func _register_world_object_instance(chunk_coord: Vector2i, object_data: Diction
 		"object_id": object_id,
 		"origin_x": origin.x,
 		"origin_y": origin.y,
-		"chunk_x": chunk_coord.x,
-		"chunk_y": chunk_coord.y,
 		"covered_chunks": covered_chunks,
 		"covered_chunk_keys": covered_chunk_keys,
 	}
 	_world_objects_by_key[object_key] = runtime_data
-
-	for covered_chunk in covered_chunks:
-		if _is_chunk_runtime_loaded(covered_chunk):
-			_add_loaded_chunk_reference(object_key, covered_chunk)
 
 	for occupied_cell in definition.get_occupied_world_cells(origin):
 		_occupied_cells[_cell_key(occupied_cell)] = object_key
@@ -226,6 +217,7 @@ func _register_world_object_instance(chunk_coord: Vector2i, object_data: Diction
 		_append_cell_object_key(_breakable_cells, breakable_cell, object_key)
 
 	_spawn_world_object_visual(object_key, definition, origin)
+	_add_loaded_chunk_reference(object_key, chunk_coord)
 
 
 func _remove_world_object_instance(object_key: String, detach_visual_for_break: bool) -> void:
@@ -476,14 +468,78 @@ func _get_definition(object_id: String):
 	return _world_object_catalog.call("get_definition", object_id)
 
 
-func _add_existing_chunk_references(chunk_coord: Vector2i) -> void:
-	var chunk_key := _chunk_key(chunk_coord)
-	for object_key_variant in _world_objects_by_key.keys():
-		var object_key := String(object_key_variant)
-		var runtime_data := _world_objects_by_key.get(object_key, {}) as Dictionary
-		var covered_chunk_keys := runtime_data.get("covered_chunk_keys", {}) as Dictionary
-		if covered_chunk_keys.has(chunk_key):
-			_add_loaded_chunk_reference(object_key, chunk_coord)
+func _prepare_chunk_covering_world_objects(chunk: ChunkData) -> Dictionary:
+	if multiplayer.is_server():
+		var covering_objects := _build_covering_world_objects_for_chunk(chunk.chunk_coord)
+		chunk.set_covering_world_objects(covering_objects)
+		return covering_objects
+	return chunk.get_covering_world_objects()
+
+
+func _build_covering_world_objects_for_chunk(chunk_coord: Vector2i) -> Dictionary:
+	var covering_objects: Dictionary = {}
+	for origin_chunk_coord in _get_candidate_origin_chunks_for_chunk(chunk_coord):
+		var source_chunk := _get_loaded_chunk(origin_chunk_coord)
+		if source_chunk == null:
+			source_chunk = _load_chunk_for_persistence(origin_chunk_coord)
+		if source_chunk == null:
+			continue
+
+		var effective_objects := source_chunk.get_effective_world_objects()
+		for object_key_variant in effective_objects.keys():
+			var local_object_data := effective_objects[object_key_variant] as Dictionary
+			if local_object_data.is_empty():
+				continue
+
+			var object_id := String(local_object_data.get("object_id", ""))
+			if object_id.is_empty():
+				continue
+
+			var local_origin := ChunkData.local_origin_from_data(local_object_data)
+			var origin := _local_to_world(local_origin, origin_chunk_coord)
+			if not _world_object_covers_chunk(object_id, origin, chunk_coord):
+				continue
+
+			var object_key := _world_object_key(object_id, origin)
+			covering_objects[object_key] = _build_world_object_coverage_data(object_id, origin)
+
+	return covering_objects
+
+
+func _add_world_object_to_loaded_chunk_coverages(object_id: String, origin: Vector2i) -> void:
+	var definition = _get_definition(object_id)
+	if definition == null:
+		return
+
+	var object_key := _world_object_key(object_id, origin)
+	var object_data := _build_world_object_coverage_data(object_id, origin)
+	for covered_chunk in _get_covered_chunks(definition, origin):
+		var chunk := _get_loaded_chunk(covered_chunk)
+		if chunk == null:
+			continue
+		chunk.upsert_covering_world_object(object_key, object_data)
+		_register_world_object_instance(covered_chunk, object_data)
+
+
+func _remove_world_object_from_loaded_chunk_coverages(object_id: String, origin: Vector2i) -> void:
+	var definition = _get_definition(object_id)
+	if definition == null:
+		return
+
+	var object_key := _world_object_key(object_id, origin)
+	for covered_chunk in _get_covered_chunks(definition, origin):
+		var chunk := _get_loaded_chunk(covered_chunk)
+		if chunk == null:
+			continue
+		chunk.erase_covering_world_object(object_key)
+
+
+func _build_world_object_coverage_data(object_id: String, origin: Vector2i) -> Dictionary:
+	return {
+		"object_id": object_id,
+		"origin_x": origin.x,
+		"origin_y": origin.y,
+	}
 
 
 func _release_world_object_chunk_reference(
@@ -555,6 +611,78 @@ func _get_covered_chunks(definition, origin: Vector2i) -> Array[Vector2i]:
 	return covered_chunks
 
 
+func _world_object_covers_chunk(object_id: String, origin: Vector2i, chunk_coord: Vector2i) -> bool:
+	var definition = _get_definition(object_id)
+	if definition == null:
+		return false
+	for covered_chunk in _get_covered_chunks(definition, origin):
+		if covered_chunk == chunk_coord:
+			return true
+	return false
+
+
+func _get_candidate_origin_chunks_for_chunk(chunk_coord: Vector2i) -> Array[Vector2i]:
+	var bounds := _get_coverage_origin_bounds()
+	var min_world_x := chunk_coord.x * GameConstants.CHUNK_SIZE - int(bounds.get("max_x", 0))
+	var max_world_x := (
+		chunk_coord.x * GameConstants.CHUNK_SIZE
+		+ GameConstants.CHUNK_SIZE
+		- 1
+		- int(bounds.get("min_x", 0))
+	)
+	var min_world_y := chunk_coord.y * GameConstants.CHUNK_SIZE - int(bounds.get("max_y", 0))
+	var max_world_y := (
+		chunk_coord.y * GameConstants.CHUNK_SIZE
+		+ GameConstants.CHUNK_SIZE
+		- 1
+		- int(bounds.get("min_y", 0))
+	)
+
+	var min_chunk := _cell_to_chunk(Vector2i(min_world_x, min_world_y))
+	var max_chunk := _cell_to_chunk(Vector2i(max_world_x, max_world_y))
+	var result: Array[Vector2i] = []
+	for y in range(min_chunk.y, max_chunk.y + 1):
+		for x in range(min_chunk.x, max_chunk.x + 1):
+			result.append(Vector2i(x, y))
+	return result
+
+
+func _get_coverage_origin_bounds() -> Dictionary:
+	if not _coverage_origin_bounds.is_empty():
+		return _coverage_origin_bounds
+
+	var min_x := 0
+	var max_x := 0
+	var min_y := 0
+	var max_y := 0
+	for definition_variant in _world_object_catalog.registry.values():
+		var definition = definition_variant
+		if definition == null:
+			continue
+
+		var relevant_cells: Array[Vector2i] = []
+		relevant_cells.append_array(definition.hit_cells)
+		relevant_cells.append_array(definition.occupied_cells)
+		relevant_cells.append_array(definition.breakable_cells)
+		relevant_cells.append_array(definition.collision_cells)
+		if relevant_cells.is_empty():
+			relevant_cells.append(Vector2i.ZERO)
+
+		for offset in relevant_cells:
+			min_x = mini(min_x, offset.x)
+			max_x = maxi(max_x, offset.x)
+			min_y = mini(min_y, offset.y)
+			max_y = maxi(max_y, offset.y)
+
+	_coverage_origin_bounds = {
+		"min_x": min_x,
+		"max_x": max_x,
+		"min_y": min_y,
+		"max_y": max_y,
+	}
+	return _coverage_origin_bounds
+
+
 func _get_loaded_chunk(chunk_coord: Vector2i) -> ChunkData:
 	if chunk_manager == null:
 		return null
@@ -566,13 +694,6 @@ func _load_chunk_for_persistence(chunk_coord: Vector2i) -> ChunkData:
 	if chunk_manager == null or not chunk_manager.has_method("_generate_and_restore"):
 		return null
 	return chunk_manager._generate_and_restore(chunk_coord) as ChunkData
-
-
-func _is_chunk_runtime_loaded(chunk_coord: Vector2i) -> bool:
-	if chunk_manager == null:
-		return false
-	var loaded_chunks: Dictionary = chunk_manager.loaded_chunks
-	return loaded_chunks.has(chunk_coord) and loaded_chunks[chunk_coord] != null
 
 
 func _append_cell_object_key(map: Dictionary, coord: Vector2i, object_key: String) -> void:

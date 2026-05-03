@@ -9,6 +9,8 @@ extends Resource
 ##   - generated base objects
 ##   - player additions
 ##   - removals against generated base objects
+## Runtime/network chunk payloads may also carry a world-space coverage snapshot
+## for objects whose footprint intersects this chunk, even when their origin lives elsewhere.
 
 var chunk_coord: Vector2i
 var ground_base_tiles: PackedInt32Array
@@ -18,6 +20,7 @@ var ground_modifications: Dictionary = {}
 var top_modifications: Dictionary = {}
 var world_object_additions: Dictionary = {}
 var world_object_removals: Dictionary = {}
+var covering_world_objects: Dictionary = {}
 
 
 func _init(coord: Vector2i = Vector2i.ZERO) -> void:
@@ -123,6 +126,29 @@ func has_any_modifications() -> bool:
 	)
 
 
+func set_covering_world_objects(objects: Dictionary) -> void:
+	covering_world_objects = {}
+	for key_variant in objects.keys():
+		var object_data := objects[key_variant] as Dictionary
+		if object_data.is_empty():
+			continue
+		covering_world_objects[String(key_variant)] = object_data.duplicate(true)
+
+
+func get_covering_world_objects() -> Dictionary:
+	return covering_world_objects.duplicate(true)
+
+
+func upsert_covering_world_object(object_key: String, object_data: Dictionary) -> void:
+	if object_key.is_empty() or object_data.is_empty():
+		return
+	covering_world_objects[object_key] = object_data.duplicate(true)
+
+
+func erase_covering_world_object(object_key: String) -> void:
+	covering_world_objects.erase(object_key)
+
+
 func serialize() -> PackedByteArray:
 	var data: Dictionary = {
 		"cx": chunk_coord.x,
@@ -134,6 +160,7 @@ func serialize() -> PackedByteArray:
 		"top_mods": top_modifications,
 		"world_object_additions": world_object_additions,
 		"world_object_removals": world_object_removals,
+		"covering_world_objects": covering_world_objects,
 	}
 	return var_to_bytes(data)
 
@@ -148,6 +175,7 @@ static func deserialize(bytes: PackedByteArray) -> ChunkData:
 	chunk.top_modifications = data.get("top_mods", {})
 	chunk.world_object_additions = data.get("world_object_additions", {})
 	chunk.world_object_removals = data.get("world_object_removals", {})
+	chunk.covering_world_objects = data.get("covering_world_objects", {})
 	return chunk
 
 

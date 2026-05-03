@@ -261,7 +261,8 @@ Current layer split:
 - trees, coral, and placeable stations all spawn through the same runtime object path and share occupancy, break, hit, and visual lookup contracts
 - decorative multi-cell world-object visuals can overlap other objects on non-occupied cells; only occupied footprint cells block new placement, while hit / break lookup still resolves the overlapping runtime objects
 - runtime world-object activation derives `covered_chunks` from the object's world-space cells and keeps the object alive while at least one covered chunk remains loaded
-- covered-chunk activation is lifecycle-only; it does not force-load neighboring chunks or expand the chunk streaming radius
+- each loaded chunk carries a world-space coverage snapshot for every static world object whose footprint intersects that chunk, so activation and lookup no longer depend on the origin chunk loading first
+- the coverage index does not force-load neighboring chunks or expand the chunk streaming radius
 - trees still use tall prop-style atlas regions and trunk-only collision, but no longer live on a separate persistence path
 - break crack-state is rendered on the actual world visual node for breakable tiles and static world objects, so occlusion and y-sorting follow the same render object
 

@@ -6,19 +6,43 @@
       "name": "planner",
       "role": "planner",
       "provider": "codex",
+      "fallback_providers": ["claude"],
       "enabled": true
     },
     {
       "name": "builder",
       "role": "builder",
       "provider": "codex",
+      "fallback_providers": ["claude"],
       "enabled": true
+    },
+    {
+      "name": "verify",
+      "role": "verify",
+      "provider": "powershell",
+      "enabled": true,
+      "commands": [
+        {
+          "name": "project-parse",
+          "command": "godot --headless --quit --path ."
+        },
+        {
+          "name": "main-scene-boot",
+          "command": "godot --headless --path . --scene res://scenes/main/main.tscn --quit-after 1"
+        },
+        {
+          "name": "world-generator-boot",
+          "command": "godot --headless --path . --scene res://scenes/world/world_generator.tscn --quit-after 1"
+        }
+      ]
     },
     {
       "name": "reviewer",
       "role": "reviewer",
       "provider": "codex",
-      "enabled": true
+      "fallback_providers": ["claude"],
+      "enabled": true,
+      "accepted_review_findings": []
     }
   ],
   "autonomy": {
