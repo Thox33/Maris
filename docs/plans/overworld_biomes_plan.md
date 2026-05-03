@@ -3,7 +3,7 @@
 See also:
 
 - [`../index.md`](../index.md)
-- [`overworld_migration_plan.md`](overworld_migration_plan.md)
+- [`../architecture/overview.md`](../architecture/overview.md)
 - [`roadmap.md`](roadmap.md)
 
 Status: 2026-04-12
@@ -12,7 +12,7 @@ Status: 2026-04-12
 
 Define the target world shape, biome layout, and progression logic for the overworld.
 This document is intentionally about world identity and generation direction, not about
-the lower-level migration steps already tracked in [`overworld_migration_plan.md`](overworld_migration_plan.md).
+the lower-level runtime baseline already documented in [`../architecture/overview.md`](../architecture/overview.md).
 
 ## Recommended Direction
 

@@ -46,7 +46,7 @@ Prerequisite for: block placing, crafting, drops, chests, hotbar.
 ---
 
 ### World Persistence (Save / Load)
-ChunkData already has `base_tiles` + `modifications` separately - the hard part is done.
+ChunkData already separates regenerated base terrain from saved per-layer modifications (`ground`, `top`, `props`) - the hard part is done.
 
 - [x] World metadata + chunk/player save files
 - [x] Periodic save + on-quit save
